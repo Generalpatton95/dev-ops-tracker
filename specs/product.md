@@ -69,6 +69,30 @@ A requirement edit sends its tasks through the flag step before they can count t
 
 Where this fits: tools like [GitHub Spec Kit](https://github.com/github/spec-kit) and [Kiro](https://kiro.dev/blog/from-chat-to-specs-deep-dive/) already run a spec → plan → tasks flow, but inside one developer's repo or IDE, as markdown files. This app brings that flow to the whole team's tracker. V1 should import and export those spec files so teams already using them don't start over.
 
+## Git and deploy integration
+
+The tracker follows git, so nobody moves tasks by hand: a task ID in a branch, commit or PR links the work, and PR and deploy events move the task.
+
+| When this happens | The app does this |
+| --- | --- |
+| A branch is created with `dot-12` in its name | Links it to DOT-12 and moves the task to Doing |
+| A commit mentions DOT-12 | Adds it to the task's activity |
+| A PR naming DOT-12 is opened | Links the PR and moves the task to Review |
+| CI checks run on the PR | Shows passing or failing on the task card |
+| The PR is merged | Moves the task to Done |
+| The PR is closed without merging | Moves the task back to Doing |
+| A preview deploy is ready | Puts the preview link on the task |
+| A production deploy includes the merge | Marks the task shipped; a requirement is shipped when all its tasks are |
+| A spec is edited in the app | Opens a PR that updates `/specs` in the repo |
+
+Rules:
+
+- **Branch from a task.** Each task has a button that copies `git checkout -b dot-12-short-title`, so the link exists from the first commit.
+- **IDs match loosely.** `DOT-12`, `dot-12` and `dot12` all count, in branch names, commit messages and PR titles or bodies.
+- **Done vs shipped.** Done means merged. Shipped means live in production.
+- **People can still move tasks.** Git events move them by default, but a manual move always wins.
+- **GitHub is core, Vercel is optional.** Deploy status comes from GitHub deployment statuses, which Vercel and many other hosts already post. So previews and shipped status work without any Vercel-only code, in line with the portability rule.
+
 ## Screens and navigation
 
 V1 has four screens, and anything in the app is at most two clicks or one command away.
@@ -99,7 +123,10 @@ V1 ships the tracker plus the full spec loop for one team; anything for big orgs
 | AI task generation from a spec | Yes | |
 | Spec change flags with diffs | Yes | |
 | Agent brief export, API and MCP server | Yes | |
-| GitHub PR and branch linking | Yes | |
+| GitHub linking of branches, commits and PRs by task ID | Yes | |
+| Task status from PR events, CI checks on cards | Yes | |
+| Preview links and shipped status from deploys | Yes | |
+| Spec export to the repo by PR | Yes | Two-way sync |
 | Import/export Spec Kit and Kiro spec files | Yes | |
 | Cycles (sprints) | Basic | Burndown and velocity |
 | Notifications | In-app | Email, Slack, Discord |
@@ -132,7 +159,7 @@ One TypeScript web app on Postgres, with GitHub, the Claude API and an MCP serve
 | Database | Postgres with Drizzle ORM | Relational data with clear links; typed schema and migrations |
 | Live updates | Server-sent events | Board and spec views update without refresh, simpler than websockets |
 | Auth | Auth.js with GitHub sign-in | Every user is a developer with a GitHub account |
-| Git link | GitHub App with webhooks | Links branches and PRs, moves tasks on merge |
+| Git link | GitHub App with webhooks | Links branches, commits and PRs, moves tasks on PR events, reads CI and deploy statuses |
 | AI | Claude API | Task generation, change diffs, agent briefs |
 | Agents | MCP server + REST API | Coding agents read tasks and specs and update status |
 | Hosting | Vercel for the app, Neon for Postgres | Free tiers to start; each Vercel preview deploy gets its own Neon database branch |
@@ -147,17 +174,19 @@ The key link is task → requirement version: a task is stale when the requireme
 
 | Table | Key fields | Links to |
 | --- | --- | --- |
-| workspace | id, name | |
-| user | id, name, github_id | |
+| workspace | id, name, invite_token | |
+| user | id, name, github_id, avatar_url | |
 | membership | user_id, workspace_id, role (owner/member/guest) | workspace, user |
-| project | id, workspace_id, key (e.g. DOT), name, repo | workspace |
+| project | id, workspace_id, key (e.g. DOT), name, repo, next_task_number, archived_at | workspace |
 | spec | id, project_id, title, body_md, status (draft/active/archived) | project |
-| requirement | id, spec_id, ref (REQ-12), rule, acceptance[], version | spec |
-| requirement_version | requirement_id, version, rule, acceptance[], changed_by, changed_at | requirement |
-| task | id, project_id, requirement_id, built_on_version, title, status, assignee_id, size, tags[] | project, requirement, user |
-| task_link | task_id, kind (branch/pr/commit), url, state | task |
+| requirement | id, spec_id, ref (REQ-12), rule, acceptance[] (text + checked), version | spec |
+| requirement_version | requirement_id, version, rule, acceptance[] (text only), changed_by, changed_at | requirement |
+| task | id, project_id, number (DOT-12 = key + number), requirement_id, built_on_version, title, status, assignee_id, size, tags[], cycle_id | project, requirement, user, cycle |
+| task_link | task_id, kind (branch/commit/pr/check/deploy), url, state, environment (preview/production) | task |
 | cycle | id, project_id, start, end | project |
 | activity | id, entity, entity_id, change, actor, at | any |
+
+Sign-in sessions live in Postgres in the Auth.js tables (account, session, verification_token). From GitHub the app keeps only the user's id, name and avatar: no email, and no GitHub access tokens.
 
 Stale rule: a task `t` is stale when `t.built_on_version < requirement(t).version`.
 
@@ -183,14 +212,14 @@ Build it in six milestones, each usable on its own, and build it spec-driven: th
    - Done when: you can sign in and create a project on a live URL.
 2. **Tracker core.** Tasks, board, task panel, My work, command palette, shortcuts.
    - Done when: the build of this app is tracked in the app itself.
-3. **Specs.** Spec editor with requirement blocks, linking tasks to requirements, coverage view.
-   - Done when: every open task points at a requirement.
+3. **Specs and GitHub linking.** Spec editor with requirement blocks, linking tasks to requirements, coverage view, and a GitHub App that links branches, commits and PRs by task ID.
+   - Done when: every open task points at a requirement, and a PR naming a task shows up on it.
 4. **Change tracking.** Requirement versions, stale flags, diff view, resolve flow.
    - Done when: editing a requirement flags its tasks with a diff.
 5. **AI and agents.** Task generation from a spec, agent brief export, MCP server and API.
    - Done when: a coding agent picks up a task from the app and opens a PR for it.
-6. **GitHub and beta.** PR and branch linking, auto-move on merge, Spec Kit/Kiro import, onboarding a first outside team.
-   - Done when: a real team uses it for 4 weeks.
+6. **Git flow, deploys and beta.** Task status from PR events, CI on cards, preview links and shipped status, spec export by PR, Spec Kit/Kiro import, onboarding a first outside team.
+   - Done when: a real team uses it for 4 weeks without moving tasks by hand.
 
 ## Decisions
 
