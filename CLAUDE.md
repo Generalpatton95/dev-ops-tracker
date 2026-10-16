@@ -24,15 +24,19 @@ Every change traces back to a requirement in a spec.
 - **Stack:** Next.js (App Router) + TypeScript + Tailwind, tRPC, Postgres with Drizzle, Auth.js with GitHub sign-in.
 - **Portable core (REQ-7):** the app must run on any Node host with any Postgres via `DATABASE_URL`. No Vercel-only or Neon-only services in app code; those belong in deploy config.
 - **Secrets** go in env vars, never in the repo. Keep `.env.example` up to date with variable names only.
+- **Next.js 16 is newer than most training data.** Read the guide in `node_modules/next/dist/docs/` before writing Next code (see `AGENTS.md`).
 - **Keep it simple.** Check `specs/product.md` → Non-goals before adding anything that sounds like Jira (custom fields, workflows, story points, query languages, permission schemes).
 
 ## Working style
 
 - Small PRs, one task each where possible.
-- Run type check, lint and tests before calling a task done.
+- Run `pnpm typecheck`, `pnpm lint`, `pnpm format:check`, `pnpm test` and `pnpm build` before calling a task done.
 - Plain, short commit messages and PR descriptions.
 
 ## Where things are
 
 - `specs/` — product spec, milestone specs, spec format guide
+- `src/app/` — pages and the tRPC route (`api/trpc/[trpc]`)
+- `src/server/` — tRPC setup and routers; tests sit next to the code as `*.test.ts`
+- `src/trpc/` — browser tRPC client and limits shared with the server
 - Working copies of the specs are also kept as Claude Docs; if they disagree with the files here, ask which is current.

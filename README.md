@@ -28,6 +28,25 @@ See [`specs/README.md`](specs/README.md) for the spec format.
 
 Next.js + TypeScript + Tailwind, tRPC, Postgres with Drizzle, Auth.js (GitHub sign-in). The hosted version runs on Vercel and Neon, but the core app runs on any Node host with any Postgres.
 
+## Run it locally
+
+You need Node 22 or newer and [pnpm](https://pnpm.io/installation).
+
+```sh
+pnpm install
+pnpm dev        # http://localhost:3000
+```
+
+Before opening a PR, run these checks:
+
+```sh
+pnpm typecheck
+pnpm lint
+pnpm format:check
+pnpm test
+pnpm build
+```
+
 ## License
 
 [AGPL-3.0](LICENSE). You can self-host it and change it; if you run a modified version as a service, you have to share your changes.
