@@ -15,6 +15,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Claude Code mods run in the Claude Code engine, not Node; checked with `claude plugin validate`/`test`.
+    ".claude/**",
   ]),
 ]);
 

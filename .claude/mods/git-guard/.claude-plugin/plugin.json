@@ -1,0 +1,8 @@
+{
+  "name": "git-guard",
+  "version": "0.1.0",
+  "description": "Denies git commands that discard working-tree changes (reset --hard, checkout --, restore, clean -f, stash, switch -f) while the repo has uncommitted changes.",
+  "author": {
+    "name": "Austin Patton"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "dev-ops-tracker",
+  "owner": { "name": "Austin Patton" },
+  "plugins": [
+    {
+      "name": "git-guard",
+      "source": "./.claude/mods/git-guard",
+      "description": "Blocks git commands that discard uncommitted changes while the tree is dirty."
+    }
+  ]
+}
