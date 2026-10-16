@@ -52,6 +52,8 @@ Defined in `.claude/agents/` (added 2026-10-15). The builder builds; both review
 
 Mods are checked with `claude plugin validate <dir>` and `claude plugin test <dir>` (git-guard: 100 tests), not by the app's lint or type check. A guard is a backstop, not a replacement for checking `git status`.
 
+To load the mods in a session, the repo is a local plugin marketplace (`.claude-plugin/marketplace.json`). Run once per machine: `claude plugin marketplace add <path to this repo>`, then `claude plugin install git-guard@dev-ops-tracker --scope local`. It reads from `.claude/mods/` directly, so after editing a mod run `/reload-plugins`.
+
 ## Agent/mod audit
 
 Counted in tasks, because a spec here is a whole milestone. Tasks done: 4 (T-1 to T-4). Last audit: 2026-10-15, when the agents and git-guard were created. **Next audit due when T-7 is done**, or sooner when a trigger in `~/.claude/CLAUDE.md` fires (an agent mistake better instructions would prevent, a new area no agent covers, a changed convention, a milestone).
