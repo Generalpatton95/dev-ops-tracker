@@ -26,6 +26,9 @@ pnpm-debug.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# keys
+*.pem
+
 # testing
 coverage/
 

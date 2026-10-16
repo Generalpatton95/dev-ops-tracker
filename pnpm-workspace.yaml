@@ -1,0 +1,8 @@
+allowBuilds:
+  sharp: false
+  unrs-resolver: false
+
+# Audit exceptions. Each one is recorded with its reason in specs/m1-skeleton.md (Design notes).
+auditConfig:
+  ignoreGhsas:
+    - GHSA-vfj7-8cjw-p6xm # braces <=3.0.3: dev-only via eslint-config-next, no patch yet
