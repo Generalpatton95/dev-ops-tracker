@@ -55,7 +55,7 @@ Eight requirements, each written as a rule with checks that prove it works. Task
 **REQ-8 Repo basics.** The repo is ready for outside contributors.
 
 - [x] The repo has a README, an AGPL license and a `/specs` folder holding this spec.
-- [ ] Every PR runs type checks, lint, a format check, tests, a production build and a dependency audit (high and critical), and must pass before merge. (Format check, build and audit added 2026-10-15.)
+- [x] Every PR runs type checks, lint, a format check, tests, a production build and a dependency audit (high and critical), and must pass before merge. (Format check, build and audit added 2026-10-15.)
 
 ## Design notes
 
@@ -83,7 +83,7 @@ Twelve tasks, in build order. Until the app can track itself (M2), this table is
 | --- | --- | --- | --- | --- |
 | T-1 | Create the GitHub repo with README, AGPL license and `/specs` folder | REQ-8 | S | Done |
 | T-2 | Scaffold Next.js, TypeScript, Tailwind and tRPC | REQ-8 | M | Review |
-| T-3 | Add CI: type check, lint, format check, tests, build and audit on every PR | REQ-8 | S | Doing |
+| T-3 | Add CI: type check, lint, format check, tests, build and audit on every PR | REQ-8 | S | Review |
 | T-4 | Create the Neon project and production database | REQ-5 | S | Todo |
 | T-5 | Write the Drizzle schema for all v1 tables and the first migration | REQ-5 | M | Todo |
 | T-6 | Link the repo to a Vercel project, set env vars, run migrations on deploy | REQ-6 | S | Todo |
