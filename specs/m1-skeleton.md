@@ -38,7 +38,7 @@ Eight requirements, each written as a rule with checks that prove it works. Task
 
 **REQ-5 Database schema.** The full v1 schema from the product spec exists from day one.
 
-- [ ] All v1 tables are defined in Drizzle and created by migrations.
+- [x] All v1 tables are defined in Drizzle and created by migrations.
 - [ ] Migrations run automatically on deploy.
 
 **REQ-6 Deploy pipeline.** Code goes live without manual steps.
@@ -95,7 +95,7 @@ Twelve tasks, in build order. Until the app can track itself (M2), this table is
 | T-2 | Scaffold Next.js, TypeScript, Tailwind and tRPC | REQ-8 | M | Done |
 | T-3 | Add CI: type check, lint, format check, tests, build and audit on every PR | REQ-8 | S | Done |
 | T-4 | Create the Neon project and production database | REQ-5 | S | Done |
-| T-5 | Write the Drizzle schema for all v1 tables and the first migration | REQ-5 | M | Doing |
+| T-5 | Write the Drizzle schema for all v1 tables and the first migration | REQ-5 | M | Done |
 | T-6 | Link the repo to a Vercel project, set env vars, run migrations on deploy | REQ-6 | S | Todo |
 | T-7 | Turn on Neon branches for Vercel preview deploys | REQ-6 | S | Todo |
 | T-8 | Add GitHub sign-in, sign-out, protected pages and rate limits | REQ-1 | M | Todo |
