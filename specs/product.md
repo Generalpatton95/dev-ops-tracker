@@ -174,17 +174,19 @@ The key link is task → requirement version: a task is stale when the requireme
 
 | Table | Key fields | Links to |
 | --- | --- | --- |
-| workspace | id, name | |
-| user | id, name, github_id | |
+| workspace | id, name, invite_token | |
+| user | id, name, github_id, avatar_url | |
 | membership | user_id, workspace_id, role (owner/member/guest) | workspace, user |
-| project | id, workspace_id, key (e.g. DOT), name, repo | workspace |
+| project | id, workspace_id, key (e.g. DOT), name, repo, next_task_number, archived_at | workspace |
 | spec | id, project_id, title, body_md, status (draft/active/archived) | project |
 | requirement | id, spec_id, ref (REQ-12), rule, acceptance[], version | spec |
 | requirement_version | requirement_id, version, rule, acceptance[], changed_by, changed_at | requirement |
-| task | id, project_id, requirement_id, built_on_version, title, status, assignee_id, size, tags[] | project, requirement, user |
+| task | id, project_id, number (DOT-12 = key + number), requirement_id, built_on_version, title, status, assignee_id, size, tags[] | project, requirement, user |
 | task_link | task_id, kind (branch/commit/pr/check/deploy), url, state, environment (preview/production) | task |
 | cycle | id, project_id, start, end | project |
 | activity | id, entity, entity_id, change, actor, at | any |
+
+Sign-in sessions live in Postgres in the Auth.js tables (account, session, verification_token). From GitHub the app keeps only the user's id, name and avatar: no email, and no GitHub access tokens.
 
 Stale rule: a task `t` is stale when `t.built_on_version < requirement(t).version`.
 
