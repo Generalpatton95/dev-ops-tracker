@@ -37,7 +37,7 @@ pnpm install
 pnpm dev        # http://localhost:3000
 ```
 
-Before opening a PR, run these checks:
+Before opening a PR, run the checks CI runs (CI also runs `pnpm audit --audit-level high`):
 
 ```sh
 pnpm typecheck

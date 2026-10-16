@@ -55,7 +55,7 @@ Eight requirements, each written as a rule with checks that prove it works. Task
 **REQ-8 Repo basics.** The repo is ready for outside contributors.
 
 - [x] The repo has a README, an AGPL license and a `/specs` folder holding this spec.
-- [ ] Every PR runs type checks, lint, a format check, tests and a production build, and must pass before merge. (Format check and build added 2026-10-15.)
+- [ ] Every PR runs type checks, lint, a format check, tests, a production build and a dependency audit (high and critical), and must pass before merge. (Format check, build and audit added 2026-10-15.)
 
 ## Design notes
 
@@ -73,7 +73,7 @@ Stick to the product spec's stack and keep every hosting choice swappable.
   - No rate limiting yet. The only public call is a health ping, and a correct limiter needs shared storage (Postgres, T-5). Now a REQ-1 check, built in T-8.
   - The body cap trusts the `Content-Length` header. Count bytes while reading once the first mutation lands.
   - The CSP only covers framing; a nonce-based `script-src` can come later.
-- **Audit exception:** `braces` ≤3.0.3 (GHSA-vfj7-8cjw-p6xm, high, no patch) comes only through `eslint-config-next`, a dev-only lint tool that never ships and only reads our own glob patterns. Recheck at each release.
+- **Audit exception:** `braces` ≤3.0.3 (GHSA-vfj7-8cjw-p6xm, high, no patch) comes only through `eslint-config-next`, a dev-only lint tool that never ships and only reads our own glob patterns. Ignored by advisory ID in `pnpm-workspace.yaml`, so CI still fails on any new finding. Recheck at each release.
 
 ## Tasks
 
@@ -83,7 +83,7 @@ Twelve tasks, in build order. Until the app can track itself (M2), this table is
 | --- | --- | --- | --- | --- |
 | T-1 | Create the GitHub repo with README, AGPL license and `/specs` folder | REQ-8 | S | Done |
 | T-2 | Scaffold Next.js, TypeScript, Tailwind and tRPC | REQ-8 | M | Review |
-| T-3 | Add CI: type check, lint, format check, tests and build on every PR | REQ-8 | S | Todo |
+| T-3 | Add CI: type check, lint, format check, tests, build and audit on every PR | REQ-8 | S | Doing |
 | T-4 | Create the Neon project and production database | REQ-5 | S | Todo |
 | T-5 | Write the Drizzle schema for all v1 tables and the first migration | REQ-5 | M | Todo |
 | T-6 | Link the repo to a Vercel project, set env vars, run migrations on deploy | REQ-6 | S | Todo |
