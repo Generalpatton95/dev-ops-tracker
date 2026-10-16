@@ -3,3 +3,5 @@ pnpm-lock.yaml
 LICENSE
 # Specs are exported from Claude Docs; keep their formatting as exported.
 specs/
+# Claude Code mods are checked with `claude plugin validate` and `claude plugin test`.
+.claude/mods/
