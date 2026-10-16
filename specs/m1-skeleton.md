@@ -77,6 +77,13 @@ Stick to the product spec's stack and keep every hosting choice swappable.
 - **Schema (T-5, decided 2026-10-16):** the node-postgres (`pg`) driver, which works through Neon's pooler. UUID keys, Postgres enums for the fixed sets, timestamps with time zone, indexed foreign keys. Migrations use `DATABASE_URL_UNPOOLED` when set, else `DATABASE_URL`. CI applies them to a throwaway Postgres; local tests use `TEST_DATABASE_URL` when it's set. The rate-limit table comes with T-8.
 - **User data from GitHub:** id, name and avatar only. No email and no GitHub access tokens are stored. Disclosed on the privacy page before sign-in goes live (T-8). Decided 2026-10-16.
 - **Task numbers:** each project counts its own tasks (`task.number`, from `project.next_task_number`), so IDs like DOT-12 exist from the first task. Decided 2026-10-16.
+- **Cycles and acceptance ticks:** a task has an optional `cycle_id`, so the board can filter by cycle. Each acceptance criterion stores its text and whether it's checked; requirement versions keep only the text, so ticking never makes a task stale. Decided 2026-10-16.
+- **Enforced in the database:** the email and GitHub token columns that Auth.js's adapter needs exist but must stay empty (a CHECK rejects any value), so a missed wrapper fails loudly instead of storing them.
+- **Notes for later tasks (from the T-5 reviews, 2026-10-16):**
+  - T-8: wrap the adapter's `createUser` (set `github_id`, drop email) and `linkAccount` (drop tokens), with tests; give Auth.js its own logger that records error names and codes only, since Drizzle errors carry query values; hashing session tokens at rest is optional.
+  - T-10: invite tokens from `randomBytes(32)` (base64url), looked up through the unique index; consider storing a hash.
+  - T-6 and T-12: drizzle-kit loads `.env` but not `.env.local`, so export the variables before `db:migrate`.
+  - The CI Postgres image is pinned by digest; refresh it at each release. `pnpm audit` also shows a moderate esbuild finding (GHSA-67mh-4wv8-2f99) via drizzle-kit, dev only and only in esbuild's dev server, which drizzle-kit never starts.
 
 ## Tasks
 

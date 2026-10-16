@@ -179,9 +179,9 @@ The key link is task → requirement version: a task is stale when the requireme
 | membership | user_id, workspace_id, role (owner/member/guest) | workspace, user |
 | project | id, workspace_id, key (e.g. DOT), name, repo, next_task_number, archived_at | workspace |
 | spec | id, project_id, title, body_md, status (draft/active/archived) | project |
-| requirement | id, spec_id, ref (REQ-12), rule, acceptance[], version | spec |
-| requirement_version | requirement_id, version, rule, acceptance[], changed_by, changed_at | requirement |
-| task | id, project_id, number (DOT-12 = key + number), requirement_id, built_on_version, title, status, assignee_id, size, tags[] | project, requirement, user |
+| requirement | id, spec_id, ref (REQ-12), rule, acceptance[] (text + checked), version | spec |
+| requirement_version | requirement_id, version, rule, acceptance[] (text only), changed_by, changed_at | requirement |
+| task | id, project_id, number (DOT-12 = key + number), requirement_id, built_on_version, title, status, assignee_id, size, tags[], cycle_id | project, requirement, user, cycle |
 | task_link | task_id, kind (branch/commit/pr/check/deploy), url, state, environment (preview/production) | task |
 | cycle | id, project_id, start, end | project |
 | activity | id, entity, entity_id, change, actor, at | any |
