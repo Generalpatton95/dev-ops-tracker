@@ -73,7 +73,7 @@ Twelve tasks, in build order. Until the app can track itself (M2), this table is
 
 | ID | Task | Requirement | Size | Status |
 | --- | --- | --- | --- | --- |
-| T-1 | Create the GitHub repo with README, AGPL license and `/specs` folder | REQ-8 | S | Review |
+| T-1 | Create the GitHub repo with README, AGPL license and `/specs` folder | REQ-8 | S | Done |
 | T-2 | Scaffold Next.js, TypeScript, Tailwind and tRPC | REQ-8 | M | Todo |
 | T-3 | Add CI: type check, lint and tests on every PR | REQ-8 | S | Todo |
 | T-4 | Create the Neon project and production database | REQ-5 | S | Todo |
