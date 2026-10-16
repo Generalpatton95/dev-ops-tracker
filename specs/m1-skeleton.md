@@ -84,7 +84,7 @@ Twelve tasks, in build order. Until the app can track itself (M2), this table is
 | T-1 | Create the GitHub repo with README, AGPL license and `/specs` folder | REQ-8 | S | Done |
 | T-2 | Scaffold Next.js, TypeScript, Tailwind and tRPC | REQ-8 | M | Done |
 | T-3 | Add CI: type check, lint, format check, tests, build and audit on every PR | REQ-8 | S | Done |
-| T-4 | Create the Neon project and production database | REQ-5 | S | Todo |
+| T-4 | Create the Neon project and production database | REQ-5 | S | Done |
 | T-5 | Write the Drizzle schema for all v1 tables and the first migration | REQ-5 | M | Todo |
 | T-6 | Link the repo to a Vercel project, set env vars, run migrations on deploy | REQ-6 | S | Todo |
 | T-7 | Turn on Neon branches for Vercel preview deploys | REQ-6 | S | Todo |
