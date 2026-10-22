@@ -1,6 +1,6 @@
 # Spec M1 — Skeleton
 
-Status: in progress · Owner: Austin Patton · Last updated: 2026-10-15
+Status: in progress · Owner: Austin Patton · Last updated: 2026-10-16
 
 ## Goal
 
@@ -38,7 +38,7 @@ Eight requirements, each written as a rule with checks that prove it works. Task
 
 **REQ-5 Database schema.** The full v1 schema from the product spec exists from day one.
 
-- [ ] All v1 tables are defined in Drizzle and created by migrations.
+- [x] All v1 tables are defined in Drizzle and created by migrations.
 - [ ] Migrations run automatically on deploy.
 
 **REQ-6 Deploy pipeline.** Code goes live without manual steps.
@@ -74,6 +74,16 @@ Stick to the product spec's stack and keep every hosting choice swappable.
   - The body cap trusts the `Content-Length` header. Count bytes while reading once the first mutation lands.
   - The CSP only covers framing; a nonce-based `script-src` can come later.
 - **Audit exception:** `braces` ≤3.0.3 (GHSA-vfj7-8cjw-p6xm, high, no patch) comes only through `eslint-config-next`, a dev-only lint tool that never ships and only reads our own glob patterns. Ignored by advisory ID in `pnpm-workspace.yaml`, so CI still fails on any new finding. Recheck at each release.
+- **Schema (T-5, decided 2026-10-16):** the node-postgres (`pg`) driver, which works through Neon's pooler. UUID keys, Postgres enums for the fixed sets, timestamps with time zone, indexed foreign keys. Migrations use `DATABASE_URL_UNPOOLED` when set, else `DATABASE_URL`. CI applies them to a throwaway Postgres; local tests use `TEST_DATABASE_URL` when it's set. The rate-limit table comes with T-8.
+- **User data from GitHub:** id, name and avatar only. No email and no GitHub access tokens are stored. Disclosed on the privacy page before sign-in goes live (T-8). Decided 2026-10-16.
+- **Task numbers:** each project counts its own tasks (`task.number`, from `project.next_task_number`), so IDs like DOT-12 exist from the first task. Decided 2026-10-16.
+- **Cycles and acceptance ticks:** a task has an optional `cycle_id`, so the board can filter by cycle. Each acceptance criterion stores its text and whether it's checked; requirement versions keep only the text, so ticking never makes a task stale. Decided 2026-10-16.
+- **Enforced in the database:** the email and GitHub token columns that Auth.js's adapter needs exist but must stay empty (a CHECK rejects any value), so a missed wrapper fails loudly instead of storing them.
+- **Notes for later tasks (from the T-5 reviews, 2026-10-16):**
+  - T-8: wrap the adapter's `createUser` (set `github_id`, drop email) and `linkAccount` (drop tokens), with tests; give Auth.js its own logger that records error names and codes only, since Drizzle errors carry query values; hashing session tokens at rest is optional.
+  - T-10: invite tokens from `randomBytes(32)` (base64url), looked up through the unique index; consider storing a hash.
+  - T-6 and T-12: drizzle-kit loads `.env` but not `.env.local`, so export the variables before `db:migrate`.
+  - The CI Postgres image is pinned by digest; refresh it at each release. `pnpm audit` also shows a moderate esbuild finding (GHSA-67mh-4wv8-2f99) via drizzle-kit, dev only and only in esbuild's dev server, which drizzle-kit never starts.
 
 ## Tasks
 
@@ -85,7 +95,7 @@ Twelve tasks, in build order. Until the app can track itself (M2), this table is
 | T-2 | Scaffold Next.js, TypeScript, Tailwind and tRPC | REQ-8 | M | Done |
 | T-3 | Add CI: type check, lint, format check, tests, build and audit on every PR | REQ-8 | S | Done |
 | T-4 | Create the Neon project and production database | REQ-5 | S | Done |
-| T-5 | Write the Drizzle schema for all v1 tables and the first migration | REQ-5 | M | Todo |
+| T-5 | Write the Drizzle schema for all v1 tables and the first migration | REQ-5 | M | Done |
 | T-6 | Link the repo to a Vercel project, set env vars, run migrations on deploy | REQ-6 | S | Todo |
 | T-7 | Turn on Neon branches for Vercel preview deploys | REQ-6 | S | Todo |
 | T-8 | Add GitHub sign-in, sign-out, protected pages and rate limits | REQ-1 | M | Todo |
