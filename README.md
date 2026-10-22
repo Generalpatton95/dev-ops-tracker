@@ -47,6 +47,24 @@ pnpm test
 pnpm build
 ```
 
+## Deploy
+
+The hosted version deploys from `main` on Vercel. `vercel.json` holds the settings: region `iad1`, and a build command that runs `pnpm run build` and then, only if the build passed, applies database migrations (`scripts/migrate-on-deploy.mjs`). A failed migration fails the deploy, so it never goes live.
+
+Environment variables in the Vercel project (names only; values never go in the repo):
+
+| Environment | Variables                                                                           |
+| ----------- | ----------------------------------------------------------------------------------- |
+| Production  | `DATABASE_URL` (pooled), `DATABASE_URL_UNPOOLED` (direct, used for migrations)      |
+| Preview     | No database variables until T-7, so previews can't reach production data            |
+| All         | `ENABLE_EXPERIMENTAL_COREPACK=1`, so Vercel uses the pnpm version in `package.json` |
+
+Migrations run while the previous deploy is still serving, so each one must keep working with the code before it: add first, remove in a later deploy.
+
+Rollback: code through Vercel's Instant Rollback to the previous deployment; data through Neon's restore to a time before the deploy. The current Neon plan keeps 6 hours of history, so check each deploy straight away.
+
+Other hosts: set `DATABASE_URL` (and optionally `DATABASE_URL_UNPOOLED`), run `pnpm run db:migrate`, then start the new version. drizzle-kit loads `.env` but not `.env.local`, so export the variables (or set them in the host's environment) before running `pnpm run db:migrate`.
+
 ## License
 
 [AGPL-3.0](LICENSE). You can self-host it and change it; if you run a modified version as a service, you have to share your changes.
