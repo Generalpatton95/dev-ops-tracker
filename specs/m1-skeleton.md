@@ -1,6 +1,6 @@
 # Spec M1 — Skeleton
 
-Status: in progress · Owner: Austin Patton · Last updated: 2026-10-16
+Status: in progress · Owner: Austin Patton · Last updated: 2026-10-24
 
 ## Goal
 
@@ -89,11 +89,20 @@ Stick to the product spec's stack and keep every hosting choice swappable.
   - CI tests on Postgres 17, production's version, pinned by digest.
   - Rollback: code through Vercel's Instant Rollback to the previous deployment. Database through Neon's restore to a time before the deploy; this plan keeps 6 hours of history, so check right after each deploy.
   - First production deploy, 2026-10-22: merge of #8 (`b2c86d5`) on the Vercel project `dev-ops-tracker-2r9n` built and migrated; the health ping answers `ok`. Rollback point: Neon restore to before 19:50 UTC that day (no earlier schema). A second project, `dev-ops-tracker`, was imported before the database variables were set; its build failed after 21 seconds (most likely the migrate step stopping with no database URL; logs not checked), and it is to be deleted.
+- **Preview databases (T-7, decided 2026-10-24):**
+  - Neon's own Vercel integration (Neon-Managed, linked from the existing Neon account) creates a `preview/<git-branch>` branch for each preview deploy, injects that branch's `DATABASE_URL` and `DATABASE_URL_UNPOOLED` into the deploy, and deletes the branch once its git branch is merged or deleted. No Neon API key in GitHub, no new code for branching.
+  - Previews never copy production. The integration always branches from the Neon project's default branch, so the default becomes `preview-base`: a schema-only branch of `main`, emptied, with its own role password. `main` stays the integration's Production branch. Production data never reaches a preview, even from an approved fork PR, and preview credentials can't open production.
+  - `preview-base` holds no tables and no rows. A schema-only copy keeps the tables but not `drizzle.__drizzle_migrations`, so migrations would fail on it. It's emptied once by a guarded script that stops, changing nothing, if it finds any migration history (so run on `main` by mistake it does nothing).
+  - Each preview build migrates its branch from scratch (the T-6 migrate step already does this when a URL is set), then a seed step adds fake data: one user, a workspace they own and one project. Later tasks add to the seed as their screens land.
+  - The seed step (`scripts/`, deploy config, not app code) runs only when `VERCEL_ENV` is `preview` and a URL is set. It writes in one transaction and only when the `user` and `workspace` tables are both empty, so it never touches a database with real rows. Its fake user has a negative `github_id`, which no real GitHub account has. Output names no URL, host or user.
+  - Production's database variables move from the hand-set pair to the integration (set from `main`). The running deployment keeps its values until the next deploy; a deploy in between fails at the migrate step and is never promoted. Afterwards the owner marks them Sensitive if the integration didn't.
+  - Development builds get the integration's `vercel-dev` branch, a copy of `preview-base`, so no environment but Production holds production credentials.
+  - Rollback: disconnect the integration in Neon and set the Production pair by hand again, as in T-6. The seed and the default-branch change don't touch `main`.
 - **Notes for later tasks (from the T-5 and T-6 reviews, 2026-10-16):**
   - T-8: wrap the adapter's `createUser` (set `github_id`, drop email) and `linkAccount` (drop tokens), with tests; give Auth.js its own logger that records error names and codes only, since Drizzle errors carry query values; hashing session tokens at rest is optional.
   - T-10: invite tokens from `randomBytes(32)` (base64url), looked up through the unique index; consider storing a hash.
   - T-6 and T-12: drizzle-kit loads `.env` but not `.env.local`, so export the variables before `db:migrate`.
-  - T-7 (from the T-6 security review): Neon preview branches are copies of production, user rows included, and a fork's PR approved through Vercel's Fork Protection would run its code against one. Decide how previews are seeded or masked before turning branches on.
+  - T-7 (from the T-6 security review): Neon preview branches are copies of production, user rows included, and a fork's PR approved through Vercel's Fork Protection would run its code against one. Decide how previews are seeded or masked before turning branches on. (Decided 2026-10-24: see Preview databases.)
   - Before the first migration that locks a busy table: give migrations a `lock_timeout` (e.g. `PGOPTIONS` on the direct URL only; Neon's pooler rejects startup options). The 300s build timeout stops the deploy but not a backend already waiting on a lock.
   - The CI Postgres image is pinned by digest; refresh it at each release. `pnpm audit` also shows a moderate esbuild finding (GHSA-67mh-4wv8-2f99) via drizzle-kit, dev only and only in esbuild's dev server, which drizzle-kit never starts.
 
@@ -109,7 +118,7 @@ Twelve tasks, in build order. Until the app can track itself (M2), this table is
 | T-4 | Create the Neon project and production database | REQ-5 | S | Done |
 | T-5 | Write the Drizzle schema for all v1 tables and the first migration | REQ-5 | M | Done |
 | T-6 | Link the repo to a Vercel project, set env vars, run migrations on deploy | REQ-6 | S | Done |
-| T-7 | Turn on Neon branches for Vercel preview deploys | REQ-6 | S | Todo |
+| T-7 | Turn on Neon branches for Vercel preview deploys | REQ-6 | S | Doing |
 | T-8 | Add GitHub sign-in, sign-out, protected pages and rate limits | REQ-1 | M | Todo |
 | T-9 | Create a workspace on first sign-in, plus rename | REQ-2 | S | Todo |
 | T-10 | Build invite links and the members list | REQ-3 | M | Todo |
