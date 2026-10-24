@@ -56,7 +56,7 @@ To load the mods in a session, the repo is a local plugin marketplace (`.claude-
 
 ## Agent/mod audit
 
-Counted in tasks, because a spec here is a whole milestone. Tasks done: 4 (T-1 to T-4). Last audit: 2026-10-15, when the agents and git-guard were created. **Next audit due when T-7 is done**, or sooner when a trigger in `~/.claude/CLAUDE.md` fires (an agent mistake better instructions would prevent, a new area no agent covers, a changed convention, a milestone).
+Counted in tasks, because a spec here is a whole milestone. Tasks done: 6 (T-1 to T-6). Last audit: 2026-10-15, when the agents and git-guard were created. **Next audit due when T-7 is done**, or sooner when a trigger in `~/.claude/CLAUDE.md` fires (an agent mistake better instructions would prevent, a new area no agent covers, a changed convention, a milestone).
 
 ## Where things are
 

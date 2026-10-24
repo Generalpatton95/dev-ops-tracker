@@ -39,13 +39,13 @@ Eight requirements, each written as a rule with checks that prove it works. Task
 **REQ-5 Database schema.** The full v1 schema from the product spec exists from day one.
 
 - [x] All v1 tables are defined in Drizzle and created by migrations.
-- [ ] Migrations run automatically on deploy.
+- [x] Migrations run automatically on deploy.
 
 **REQ-6 Deploy pipeline.** Code goes live without manual steps.
 
-- [ ] A push to main deploys to production on Vercel.
+- [x] A push to main deploys to production on Vercel.
 - [ ] Every PR gets a preview deploy with its own Neon database branch.
-- [ ] Secrets live in environment variables, never in the repo.
+- [x] Secrets live in environment variables, never in the repo.
 
 **REQ-7 Portable core.** The app runs on any Node host with any Postgres.
 
@@ -88,6 +88,7 @@ Stick to the product spec's stack and keep every hosting choice swappable.
   - Migrations are forward-only and must keep working with the code before them (add first, remove in a later deploy), because the old deployment keeps serving while a new one migrates.
   - CI tests on Postgres 17, production's version, pinned by digest.
   - Rollback: code through Vercel's Instant Rollback to the previous deployment. Database through Neon's restore to a time before the deploy; this plan keeps 6 hours of history, so check right after each deploy.
+  - First production deploy, 2026-10-22: merge of #8 (`b2c86d5`) on the Vercel project `dev-ops-tracker-2r9n` built and migrated; the health ping answers `ok`. Rollback point: Neon restore to before 19:50 UTC that day (no earlier schema). A second project, `dev-ops-tracker`, was imported before the database variables were set; its build failed after 21 seconds (most likely the migrate step stopping with no database URL; logs not checked), and it is to be deleted.
 - **Notes for later tasks (from the T-5 and T-6 reviews, 2026-10-16):**
   - T-8: wrap the adapter's `createUser` (set `github_id`, drop email) and `linkAccount` (drop tokens), with tests; give Auth.js its own logger that records error names and codes only, since Drizzle errors carry query values; hashing session tokens at rest is optional.
   - T-10: invite tokens from `randomBytes(32)` (base64url), looked up through the unique index; consider storing a hash.
@@ -107,7 +108,7 @@ Twelve tasks, in build order. Until the app can track itself (M2), this table is
 | T-3 | Add CI: type check, lint, format check, tests, build and audit on every PR | REQ-8 | S | Done |
 | T-4 | Create the Neon project and production database | REQ-5 | S | Done |
 | T-5 | Write the Drizzle schema for all v1 tables and the first migration | REQ-5 | M | Done |
-| T-6 | Link the repo to a Vercel project, set env vars, run migrations on deploy | REQ-6 | S | Review |
+| T-6 | Link the repo to a Vercel project, set env vars, run migrations on deploy | REQ-6 | S | Done |
 | T-7 | Turn on Neon branches for Vercel preview deploys | REQ-6 | S | Todo |
 | T-8 | Add GitHub sign-in, sign-out, protected pages and rate limits | REQ-1 | M | Todo |
 | T-9 | Create a workspace on first sign-in, plus rename | REQ-2 | S | Todo |
