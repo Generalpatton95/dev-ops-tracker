@@ -16,12 +16,14 @@ describe("decideMigration", () => {
   it("REQ-5: a production deploy migrates when DATABASE_URL is set", () => {
     expect(decideMigration({ VERCEL_ENV: "production", DATABASE_URL: pooled })).toEqual({
       action: "migrate",
+      requireMarker: false,
     });
   });
 
   it("REQ-5: a production deploy migrates when only DATABASE_URL_UNPOOLED is set", () => {
     expect(decideMigration({ VERCEL_ENV: "production", DATABASE_URL_UNPOOLED: direct })).toEqual({
       action: "migrate",
+      requireMarker: false,
     });
   });
 
@@ -49,6 +51,22 @@ describe("decideMigration", () => {
     expect(decideMigration({ VERCEL_ENV: "preview", DATABASE_URL_UNPOOLED: direct }).action).toBe(
       "migrate",
     );
+  });
+
+  it("REQ-6: preview and development builds must find the preview-base marker before migrating; production never checks it", () => {
+    for (const VERCEL_ENV of ["preview", "development", " preview "]) {
+      expect(decideMigration({ VERCEL_ENV, DATABASE_URL: pooled }), VERCEL_ENV).toEqual({
+        action: "migrate",
+        requireMarker: true,
+      });
+    }
+    expect(
+      decideMigration({
+        VERCEL_ENV: "production",
+        DATABASE_URL: pooled,
+        DATABASE_URL_UNPOOLED: direct,
+      }),
+    ).toEqual({ action: "migrate", requireMarker: false });
   });
 
   it("REQ-6: a preview deploy with no database URL skips without failing", () => {
@@ -223,6 +241,43 @@ describe("redact", () => {
     expect(secrets).not.toContain("pw");
     const lengths = secrets.map((secret) => secret.length);
     expect(lengths).toEqual([...lengths].sort((a, b) => b - a));
+  });
+
+  it("REQ-6: also hides PGPASSWORD, PGUSER, PGHOST, PGHOST_UNPOOLED and POSTGRES_* values", () => {
+    // Fake values in the shape Neon's Vercel integration uses; nothing here exists.
+    const env = {
+      PGPASSWORD: "npg_Zz98Yy76",
+      PGUSER: "neondb_owner",
+      PGHOST: "ep-fake-host-a1b2c3-pooler.us-east-1.aws.neon.tech",
+      pghost_unpooled: "ep-fake-host-a1b2c3.us-east-1.aws.neon.tech",
+      POSTGRES_URL: "postgres://other_user:other-pass@other-host.example/neondb",
+      POSTGRES_PRISMA_URL: "postgres://prisma_user:prisma-pass@prisma-host.example/neondb",
+      POSTGRES_HOST: "pg-host.example",
+      PATH: "/usr/bin",
+    };
+    const secrets = secretsFrom(env);
+    const text = [
+      "auth failed: npg_Zz98Yy76 for neondb_owner",
+      "ENOTFOUND ep-fake-host-a1b2c3-pooler.us-east-1.aws.neon.tech",
+      "ENOTFOUND ep-fake-host-a1b2c3.us-east-1.aws.neon.tech",
+      "other_user other-pass other-host.example prisma-pass pg-host.example",
+      "PATH is /usr/bin",
+    ].join("\n");
+    const out = redact(text, secrets);
+    for (const leaked of [
+      "npg_Zz98Yy76",
+      "neondb_owner",
+      "neon.tech",
+      "other_user",
+      "other-pass",
+      "other-host",
+      "prisma-pass",
+      "pg-host",
+    ]) {
+      expect(out).not.toContain(leaked);
+    }
+    // Other variables are left alone.
+    expect(out).toContain("PATH is /usr/bin");
   });
 
   it("REQ-6: leaves text with no secrets unchanged", () => {
