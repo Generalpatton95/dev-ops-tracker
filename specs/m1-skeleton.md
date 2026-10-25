@@ -109,6 +109,7 @@ Stick to the product spec's stack and keep every hosting choice swappable.
     8. Redeploy production. Check: the build passes its migrate step (GitHub shows the Vercel check green) and the site loads.
     9. Push a commit to the T-7 PR. Check: Neon shows `preview/t-7-neon-preview-branches` with parent `preview-base`, not `main`, and the preview build log shows migrations applied and the seed added.
   - First preview, 2026-10-25: PR #10 (`00674d2`) got `preview/t-7-neon-preview-branches` from `preview-base`; the build passed the marker check, applied the migration and seeded the demo user, workspace and project, and the log showed no URL, host or password.
+  - First production deploy with the integration, 2026-10-25: merge of #10 (`5d8823f`) migrated `main` (already current) and skipped the seed; `main` still has its 14 tables, no demo rows and no marker; the health ping answers `ok`. The preview's Neon branch is deleted by the integration at the next preview deploy.
   - Rollback: in Neon → Integrations, disconnect Vercel; set the hand-set pair again in Vercel, **Production scope only**, as in T-6; set `main` as the default branch. Nothing in T-7 changes `main`'s data or schema.
 - **Notes for later tasks (from the T-5 and T-6 reviews, 2026-10-16):**
   - T-8: wrap the adapter's `createUser` (set `github_id`, drop email) and `linkAccount` (drop tokens), with tests; give Auth.js its own logger that records error names and codes only, since Drizzle errors carry query values; hashing session tokens at rest is optional.
@@ -130,7 +131,7 @@ Twelve tasks, in build order. Until the app can track itself (M2), this table is
 | T-4 | Create the Neon project and production database | REQ-5 | S | Done |
 | T-5 | Write the Drizzle schema for all v1 tables and the first migration | REQ-5 | M | Done |
 | T-6 | Link the repo to a Vercel project, set env vars, run migrations on deploy | REQ-6 | S | Done |
-| T-7 | Turn on Neon branches for Vercel preview deploys | REQ-6 | S | Review |
+| T-7 | Turn on Neon branches for Vercel preview deploys | REQ-6 | S | Done |
 | T-8 | Add GitHub sign-in, sign-out, protected pages and rate limits | REQ-1 | M | Todo |
 | T-9 | Create a workspace on first sign-in, plus rename | REQ-2 | S | Todo |
 | T-10 | Build invite links and the members list | REQ-3 | M | Todo |
