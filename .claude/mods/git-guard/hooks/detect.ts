@@ -255,6 +255,19 @@ function analyzeGit(args: string[], cwd: string | undefined, written: string, gi
       return isForce(rest) && !has(rest, "--cached") && !hasLong(rest, "--cached") ? found : undefined;
     case "checkout-index":
       return isForce(rest) ? found : undefined;
+    // `--abort` resets to the state before the operation and can take uncommitted edits with it.
+    case "merge":
+    case "am":
+    case "cherry-pick":
+    case "revert":
+    case "rebase":
+      return has(rest, "--abort") || hasLong(rest, "--abort") ? found : undefined;
+    case "worktree":
+      // `worktree remove --force` deletes another checkout's uncommitted work, which the status
+      // check below (run in this checkout) can't see. Without --force git refuses a dirty worktree.
+      return rest[0] === "remove" && isForce(rest.slice(1))
+        ? { ...found, cannotCheck: "it force-removes a git worktree, whose changes this guard can't see" }
+        : undefined;
     default:
       return undefined;
   }
