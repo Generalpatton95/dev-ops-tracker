@@ -44,7 +44,7 @@ Eight requirements, each written as a rule with checks that prove it works. Task
 **REQ-6 Deploy pipeline.** Code goes live without manual steps.
 
 - [x] A push to main deploys to production on Vercel.
-- [ ] Every PR gets a preview deploy with its own Neon database branch.
+- [x] Every PR gets a preview deploy with its own Neon database branch.
 - [x] Secrets live in environment variables, never in the repo.
 
 **REQ-7 Portable core.** The app runs on any Node host with any Postgres.
@@ -108,6 +108,7 @@ Stick to the product spec's stack and keep every hosting choice swappable.
     7. Vercel → Environment Variables. Check: exactly `DATABASE_URL` and `DATABASE_URL_UNPOOLED`, Production only, with the Neon mark; no hand-set or Preview-scoped copies; `ENABLE_EXPERIMENTAL_COREPACK` in every environment.
     8. Redeploy production. Check: the build passes its migrate step (GitHub shows the Vercel check green) and the site loads.
     9. Push a commit to the T-7 PR. Check: Neon shows `preview/t-7-neon-preview-branches` with parent `preview-base`, not `main`, and the preview build log shows migrations applied and the seed added.
+  - First preview, 2026-10-25: PR #10 (`00674d2`) got `preview/t-7-neon-preview-branches` from `preview-base`; the build passed the marker check, applied the migration and seeded the demo user, workspace and project, and the log showed no URL, host or password.
   - Rollback: in Neon → Integrations, disconnect Vercel; set the hand-set pair again in Vercel, **Production scope only**, as in T-6; set `main` as the default branch. Nothing in T-7 changes `main`'s data or schema.
 - **Notes for later tasks (from the T-5 and T-6 reviews, 2026-10-16):**
   - T-8: wrap the adapter's `createUser` (set `github_id`, drop email) and `linkAccount` (drop tokens), with tests; give Auth.js its own logger that records error names and codes only, since Drizzle errors carry query values; hashing session tokens at rest is optional.
