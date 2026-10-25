@@ -14,10 +14,10 @@ Eight requirements, each written as a rule with checks that prove it works. Task
 
 **REQ-1 Sign in with GitHub.** A user can only use the app after signing in with GitHub.
 
-- [ ] Signing in with GitHub creates a user record on first visit and reuses it after.
-- [ ] Visiting any app page while signed out sends you to the sign-in page.
-- [ ] Sign out ends the session on that device.
-- [ ] Public endpoints are rate-limited using Postgres, and fail closed if the limiter can't run. (Added 2026-10-15.)
+- [x] Signing in with GitHub creates a user record on first visit and reuses it after.
+- [x] Visiting any app page while signed out sends you to the sign-in page.
+- [x] Sign out ends the session on that device.
+- [x] Public endpoints are rate-limited using Postgres, and fail closed if the limiter can't run. (Added 2026-10-15.)
 
 **REQ-2 Workspace on first sign-in.** Every user lands in a workspace they own.
 
@@ -70,7 +70,7 @@ Stick to the product spec's stack and keep every hosting choice swappable.
 - **Tooling:** pnpm, Vitest for tests, ESLint (Next's rules) plus Prettier with Tailwind class sorting. Decided 2026-10-15.
 - **Security baseline:** pages send headers that block framing by other sites, and load nothing from outside hosts (no Google Fonts). The tRPC route caps batches at 10 calls and request bodies at 100KB, and unexpected server errors reach the client as a generic message.
 - **Known gaps (from the T-2 security review, 2026-10-15):**
-  - No rate limiting yet. The only public call is a health ping, and a correct limiter needs shared storage (Postgres, T-5). Now a REQ-1 check, built in T-8.
+  - No rate limiting yet. The only public call is a health ping, and a correct limiter needs shared storage (Postgres, T-5). Now a REQ-1 check, built in T-8. (Closed by T-8: Postgres rate limits.)
   - The body cap trusts the `Content-Length` header. Count bytes while reading once the first mutation lands.
   - The CSP only covers framing; a nonce-based `script-src` can come later.
 - **Audit exception:** `braces` ≤3.0.3 (GHSA-vfj7-8cjw-p6xm, high, no patch) comes only through `eslint-config-next`, a dev-only lint tool that never ships and only reads our own glob patterns. Ignored by advisory ID in `pnpm-workspace.yaml`, so CI still fails on any new finding. Recheck at each release.
@@ -115,13 +115,15 @@ Stick to the product spec's stack and keep every hosting choice swappable.
   - Auth.js v5 (`next-auth`, pinned to exactly `5.0.0-beta.32`: still a beta, but the release that supports Next 16 and matches `@auth/drizzle-adapter`) with the GitHub provider and database sessions in the existing Auth.js tables.
   - The adapter is wrapped: `createUser` sets `github_id`, name and `avatar_url` from the GitHub profile and drops the email; `linkAccount` drops every token field. The database CHECKs reject any email or token that slips through. Auth.js gets its own logger that records error names and codes only.
   - Every page needs a session except `/sign-in` and `/privacy`. Signed out, a page redirects to `/sign-in`, carrying only a same-site relative return path. Next 16's `proxy.ts` does the redirect, but pages, layouts and tRPC check the session on the server too; the proxy is never the only check. tRPC gets a `protectedProcedure` (`UNAUTHORIZED` when signed out); `health.ping` stays public.
-  - Sign out deletes that device's session row (Auth.js's CSRF-protected sign-out).
-  - Rate limits in Postgres (REQ-1): a `rate_limit` table keyed by an HMAC of the caller's IP and the bucket name (never the raw IP), counting fixed one-minute windows in one upsert per request; rows older than a day are deleted. Buckets: Auth.js sign-in and callback routes 10 per minute per IP; signed-out tRPC calls 60 per minute per IP. If the limiter can't run (database error, or no answer within 2 seconds), the request gets a 503: it fails closed. The HMAC key is derived from `AUTH_SECRET`.
+  - Sessions last a fixed 30 days from sign-in (not extended by use); expired session rows are deleted by the same clean-up. Sign out deletes that device's session row (Auth.js's CSRF-protected sign-out).
+  - Sign-in and sign-out buttons fetch Auth.js's CSRF token and POST to its endpoints, so every request passes the rate limit and Auth.js's CSRF check; they need JavaScript (accepted 2026-10-25). Only four Auth.js endpoints are open (`csrf`, `signin/github`, `callback/github`, `signout`); the rest answer 404.
+  - Rate limits in Postgres (REQ-1): a `rate_limit` table keyed by an HMAC of the caller's IP and the bucket name (never the raw IP), counting fixed one-minute windows (from the database's clock) in one upsert per request. IPv6 callers are counted per /64 network. A row is kept about a day after the caller's last request and deleted by a clean-up that runs as the site handles later requests (no scheduled job; decided 2026-10-25). Buckets: Auth.js sign-in and callback routes 10 per minute per IP; signed-out tRPC calls 60 per minute per IP. If the limiter can't run (database error, or no answer within 2 seconds), the request gets a 503: it fails closed. The HMAC key is derived from `AUTH_SECRET`.
   - The caller's IP comes only from the header named in `TRUSTED_IP_HEADER` (`x-real-ip` on Vercel, set by the owner). Unset, every caller shares one bucket, so it fails safe on hosts without a trusted proxy (REQ-7: no Vercel-only code).
-  - `/privacy` lists what is kept: GitHub id, name and avatar URL; the session cookie and session row; the keyed IP hash for rate limiting, deleted within a day. It also says what isn't kept (no email, no GitHub tokens, no analytics) and where it is hosted (Vercel, Neon in US East). Live before sign-in is.
+  - `/privacy` lists what is kept: GitHub id, name and avatar URL; the session cookie and session row; the keyed IP hash for rate limiting, kept about a day after the last request. It also says what isn't kept (no email, no GitHub tokens, no analytics) and where it is hosted (Vercel, Neon in US East). Live before sign-in is.
   - UI: `/sign-in` with one "Sign in with GitHub" button and a link to `/privacy`; a signed-in header with initials, name and "Sign out"; a placeholder home until T-9. Avatars are stored but not shown yet, so pages still load nothing from outside hosts.
   - Previews have no sign-in: the `AUTH_*` variables are Production only (and local), so no production secret reaches a preview. Without them the sign-in page says sign-in works on production and locally, and builds still pass.
   - Owner setup: two GitHub OAuth Apps. Production: homepage `https://dev-ops-tracker-2r9n.vercel.app`, callback `https://dev-ops-tracker-2r9n.vercel.app/api/auth/callback/github`. Local: callback `http://localhost:3000/api/auth/callback/github`. Vercel Production gets `AUTH_SECRET`, `AUTH_GITHUB_ID` and `AUTH_GITHUB_SECRET` (Sensitive) and `TRUSTED_IP_HEADER=x-real-ip`; `.env.local` gets the local app's values. `.env.example` lists the names.
+  - Known gap (accepted 2026-10-25, revisit before launch): requests carrying a session cookie, even a junk one, cost one indexed session lookup without a rate limit, and a CSRF-checked sign-out costs one delete.
   - Not now: hashing session tokens at rest (optional per the T-5 review; a database leak is already worse), avatars, preview sign-in.
   - The `rate_limit` migration only adds a table (forward-only). Rollback: Vercel Instant Rollback; the table can stay.
 - **Notes for later tasks (from the T-5 and T-6 reviews, 2026-10-16):**
@@ -129,6 +131,7 @@ Stick to the product spec's stack and keep every hosting choice swappable.
   - T-10: invite tokens from `randomBytes(32)` (base64url), looked up through the unique index; consider storing a hash.
   - T-6 and T-12: drizzle-kit loads `.env` but not `.env.local`, so export the variables before `db:migrate`.
   - T-7 (from the T-6 security review): Neon preview branches are copies of production, user rows included, and a fork's PR approved through Vercel's Fork Protection would run its code against one. Decide how previews are seeded or masked before turning branches on. (Decided 2026-10-24: see Preview databases.)
+  - T-12 (from the T-8 reviews): the rate limiter uses `date_bin`, which needs Postgres 14 or later; nothing indexes `session.expires`, so the session clean-up scans the table (fine at this size; add an index if sessions grow).
   - Before the first migration that locks a busy table: give migrations a `lock_timeout` (e.g. `PGOPTIONS` on the direct URL only; Neon's pooler rejects startup options). The 300s build timeout stops the deploy but not a backend already waiting on a lock.
   - The CI Postgres image is pinned by digest; refresh it at each release. `pnpm audit` also shows a moderate esbuild finding (GHSA-67mh-4wv8-2f99) via drizzle-kit, dev only and only in esbuild's dev server, which drizzle-kit never starts.
 
@@ -145,7 +148,7 @@ Twelve tasks, in build order. Until the app can track itself (M2), this table is
 | T-5 | Write the Drizzle schema for all v1 tables and the first migration | REQ-5 | M | Done |
 | T-6 | Link the repo to a Vercel project, set env vars, run migrations on deploy | REQ-6 | S | Done |
 | T-7 | Turn on Neon branches for Vercel preview deploys | REQ-6 | S | Done |
-| T-8 | Add GitHub sign-in, sign-out, protected pages and rate limits | REQ-1 | M | Doing |
+| T-8 | Add GitHub sign-in, sign-out, protected pages and rate limits | REQ-1 | M | Review |
 | T-9 | Create a workspace on first sign-in, plus rename | REQ-2 | S | Todo |
 | T-10 | Build invite links and the members list | REQ-3 | M | Todo |
 | T-11 | Build projects: create, sidebar list, rename, archive | REQ-4 | M | Todo |

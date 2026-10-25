@@ -374,3 +374,24 @@ export const verificationTokens = pgTable(
   },
   (t) => [primaryKey({ name: "verification_token_pkey", columns: [t.identifier, t.token] })],
 );
+
+// ---------- Rate limits (T-8, REQ-1) ----------
+
+// One row per caller and bucket, counting requests in the current one-minute window.
+// `key` is an HMAC-SHA256 (hex) of the bucket and the caller's IP, never the IP itself; the
+// CHECK refuses anything else, so a raw IP can't be stored by mistake. Rows whose window is
+// more than a day old are deleted (src/server/rate-limit.ts).
+export const rateLimits = pgTable(
+  "rate_limit",
+  {
+    key: text("key").primaryKey(),
+    windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
+    count: integer("count").notNull(),
+  },
+  (t) => [
+    // Serves the clean-up of old rows.
+    index("rate_limit_window_start_idx").on(t.windowStart),
+    check("rate_limit_key_is_hmac", sql`${t.key} ~ '^[0-9a-f]{64}$'`),
+    check("rate_limit_count_positive", sql`${t.count} >= 1`),
+  ],
+);

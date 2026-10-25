@@ -5,6 +5,11 @@ import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import * as schema from "./schema";
 
+// T-8: a hung or unreachable database makes a query fail instead of waiting for ever, so a
+// session lookup becomes "signed out" and the limiter a 503. Client-side timers only: Neon's
+// pooler rejects server startup options such as statement_timeout.
+export const POOL_TIMEOUTS = { connectionTimeoutMillis: 2_000, query_timeout: 5_000 } as const;
+
 export type Database = NodePgDatabase<typeof schema> & { $client: Pool };
 
 // Kept on globalThis so dev hot reloads reuse one pool instead of opening a new one each time.
@@ -18,7 +23,7 @@ export function getDb(): Database {
     if (!connectionString) {
       throw new Error("DATABASE_URL is not set");
     }
-    globalForDb.dotDb = drizzle(new Pool({ connectionString }), { schema });
+    globalForDb.dotDb = drizzle(new Pool({ connectionString, ...POOL_TIMEOUTS }), { schema });
   }
   return globalForDb.dotDb;
 }
