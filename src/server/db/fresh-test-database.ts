@@ -39,6 +39,10 @@ let counter = 0;
 // Postgres truncates identifiers longer than this, which could cut off the "_test" suffix.
 const MAX_NAME_BYTES = 63;
 
+// SQLSTATE admin_shutdown: what DROP DATABASE ... WITH (FORCE) sends to the sessions it ends.
+const ADMIN_SHUTDOWN = "57P01";
+const SESSIONS_GONE_TIMEOUT_MS = 5_000;
+
 /** The name for a new throwaway database; refuses one Postgres would shorten. */
 export function freshDatabaseName(label: string, unique: string): string {
   const name = `dot_${label}_${unique}_test`.toLowerCase();
@@ -48,6 +52,28 @@ export function freshDatabaseName(label: string, unique: string): string {
     );
   }
   return name;
+}
+
+/**
+ * Waits until no session but the caller's own is connected to `name`: a server backend can
+ * outlive its client's socket by a moment. Fails, rather than force-dropping live sessions, if
+ * one is still there after SESSIONS_GONE_TIMEOUT_MS (that would mean a connection was leaked).
+ */
+async function waitForNoSessions(admin: pg.Client, name: string): Promise<void> {
+  const deadline = Date.now() + SESSIONS_GONE_TIMEOUT_MS;
+  for (;;) {
+    const { rows } = await admin.query<{ n: number }>(
+      "select count(*)::int as n from pg_stat_activity " +
+        "where datname = $1 and pid <> pg_backend_pid()",
+      [name],
+    );
+    const left = rows[0]?.n ?? 0;
+    if (left === 0) return;
+    if (Date.now() > deadline) {
+      throw new Error(`${left} session(s) still connected to a test database before its drop.`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
 }
 
 export async function createFreshDatabase(
@@ -62,9 +88,18 @@ export async function createFreshDatabase(
   await admin.connect();
   let created = false;
   let pool: pg.Pool | undefined;
+  // Every connection the pool has opened, until its socket has closed. pg-pool's end() resolves
+  // as soon as it has asked its clients to close, not once they have, so dropping right after it
+  // could reach live sessions, and the drop's 57P01 would land on clients nobody listens to.
+  const closing = new Map<pg.Client, Promise<void>>();
+  let tearingDown = false;
+
   const dropAll = async () => {
+    tearingDown = true;
     await pool?.end().catch(() => {});
+    await Promise.all(closing.values());
     if (created) {
+      await waitForNoSessions(admin, name);
       await admin.query(`drop database if exists ${admin.escapeIdentifier(name)} with (force)`);
     }
     await admin.end();
@@ -80,6 +115,16 @@ export async function createFreshDatabase(
     const url = new URL(target.url);
     url.pathname = `/${name}`;
     pool = new pg.Pool({ connectionString: url.toString(), max: 4 });
+    pool.on("connect", (client) => {
+      const ended = new Promise<void>((resolve) => client.once("end", () => resolve()));
+      closing.set(client, ended);
+    });
+    // Backstop: during teardown, an idle client ended by the drop (57P01) is expected. Any other
+    // pool error is a real failure and is rethrown, so it still fails the run.
+    pool.on("error", (error: Error & { code?: string }) => {
+      if (tearingDown && error.code === ADMIN_SHUTDOWN) return;
+      throw error;
+    });
     const db = drizzle(pool, { schema });
     await migrate(db, { migrationsFolder: options.migrationsFolder ?? migrationsFolder });
     return { db, url: url.toString(), drop: dropAll };
