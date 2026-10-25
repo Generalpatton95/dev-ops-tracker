@@ -20,11 +20,14 @@ export function migrationUrl(env) {
 }
 
 /**
- * @typedef {{ action: "migrate" } | { action: "skip"; message: string } | { action: "fail"; message: string }} Decision
+ * @typedef {{ action: "migrate"; requireMarker: boolean } | { action: "skip"; message: string } | { action: "fail"; message: string }} Decision
  */
 
 /**
  * Decides what the deploy-time migrate step does. Messages name variables, never their values.
+ * Preview and development builds must first find the preview-base marker (T-7, see
+ * preview-base-lib.mjs), so one pointed at production stops before migrating. Production never
+ * checks it: `main` must never have the marker.
  * @param {Readonly<Record<string, string | undefined>>} env
  * @returns {Decision}
  */
@@ -33,7 +36,7 @@ export function decideMigration(env) {
   const hasUrl = migrationUrl(env) !== undefined;
 
   if (vercelEnv === "production") {
-    if (hasUrl) return { action: "migrate" };
+    if (hasUrl) return { action: "migrate", requireMarker: false };
     return {
       action: "fail",
       message:
@@ -43,7 +46,7 @@ export function decideMigration(env) {
   }
 
   if (vercelEnv === "preview" || vercelEnv === "development") {
-    if (hasUrl) return { action: "migrate" };
+    if (hasUrl) return { action: "migrate", requireMarker: true };
     return {
       action: "skip",
       message: `migrate-on-deploy: no database URL for this ${vercelEnv} build; skipping migrations.`,
@@ -100,16 +103,36 @@ function decoded(text) {
   }
 }
 
+/** libpq-style variables whose values are hidden too; Neon's Vercel integration can set them. */
+export const PG_SECRET_VARIABLES = ["PGPASSWORD", "PGUSER", "PGHOST", "PGHOST_UNPOOLED"];
+
 /**
- * Exact strings to hide from output: each URL variable's value, and the password, user name and
- * host inside it (raw and percent-decoded), so errors like `getaddrinfo ENOTFOUND <host>` or
- * `password authentication failed for user "<user>"` don't show them either.
+ * Whether a variable's value is hidden from output: the URL variables, PGPASSWORD, PGUSER,
+ * PGHOST, PGHOST_UNPOOLED and every POSTGRES_* variable. Any case, since Windows ignores it.
+ * @param {string} name
+ * @returns {boolean}
+ */
+function isSecretVariable(name) {
+  const upper = name.toUpperCase();
+  return (
+    URL_VARIABLES.includes(upper) ||
+    PG_SECRET_VARIABLES.includes(upper) ||
+    upper.startsWith("POSTGRES_")
+  );
+}
+
+/**
+ * Exact strings to hide from output: the value of each variable isSecretVariable names, and,
+ * when a value is a URL, the password, user name and host inside it (raw and percent-decoded),
+ * so errors like `getaddrinfo ENOTFOUND <host>` or `password authentication failed for user
+ * "<user>"` don't show them either.
  * @param {Readonly<Record<string, string | undefined>>} env
  * @returns {string[]}
  */
 export function secretsFrom(env) {
   const secrets = new Set();
-  for (const name of URL_VARIABLES) {
+  for (const name of Object.keys(env)) {
+    if (!isSecretVariable(name)) continue;
     const value = env[name]?.trim();
     if (!value) continue;
     secrets.add(value);
@@ -117,7 +140,7 @@ export function secretsFrom(env) {
     try {
       url = new URL(value);
     } catch {
-      continue; // Not a parseable URL: the whole value is already hidden.
+      continue; // Not a URL (or not parseable): the whole value is already hidden.
     }
     for (const part of [url.password, url.username, url.hostname]) {
       if (!part) continue;

@@ -49,17 +49,26 @@ pnpm build
 
 ## Deploy
 
-The hosted version deploys from `main` on Vercel. `vercel.json` holds the settings: region `iad1`, and a build command that runs `pnpm run build` and then, only if the build passed, applies database migrations (`scripts/migrate-on-deploy.mjs`). A failed migration fails the deploy, so it never goes live.
+The hosted version deploys from `main` on Vercel. `vercel.json` holds the settings: region `iad1`, and a build command that runs `pnpm run build`, then, only if the build passed, applies database migrations (`scripts/migrate-on-deploy.mjs`), then seeds preview databases (`scripts/seed-preview.mjs`, which does nothing outside previews). A failed migration fails the deploy, so it never goes live.
 
 Environment variables in the Vercel project (names only; values never go in the repo):
 
-| Environment | Variables                                                                           |
-| ----------- | ----------------------------------------------------------------------------------- |
-| Production  | `DATABASE_URL` (pooled), `DATABASE_URL_UNPOOLED` (direct, used for migrations)      |
-| Preview     | No database variables until T-7, so previews can't reach production data            |
-| All         | `ENABLE_EXPERIMENTAL_COREPACK=1`, so Vercel uses the pnpm version in `package.json` |
+| Environment | Variables                                                                                                 |
+| ----------- | --------------------------------------------------------------------------------------------------------- |
+| Production  | `DATABASE_URL` (pooled), `DATABASE_URL_UNPOOLED` (direct, used for migrations), for Neon's `main` branch  |
+| Preview     | The same two names, set per deploy by Neon's Vercel integration for that preview's own branch (see below) |
+| All         | `ENABLE_EXPERIMENTAL_COREPACK=1`, so Vercel uses the pnpm version in `package.json`                       |
 
 Migrations run while the previous deploy is still serving, so each one must keep working with the code before it: add first, remove in a later deploy.
+
+### Preview databases
+
+- **One branch per git branch.** Neon's Vercel integration gives each git branch its own Neon branch, `preview/<git-branch>`, shared by every deploy of that git branch and deleted once it's merged or deleted. Each one is branched from `preview-base`, which has no tables and no rows, never from production.
+- **Migrate, then seed.** A preview build migrates its branch from scratch, then `scripts/seed-preview.mjs` adds fake data: one user ("Demo owner", with a negative GitHub id no real account has), a workspace they own and one project (`DEMO`). It writes in one transaction, only when the `user` and `workspace` tables are both empty. Every other build, production included, skips the seed. A failed migrate or seed fails that preview.
+- **Seed additions don't reach seeded branches.** A branch that already has the demo rows keeps them as they were. To get a newer seed, push to a new git branch or delete that branch's Neon branch and redeploy.
+- **Overlapping first builds.** If two builds of a new git branch run at once, the second one's migrate step can fail. Redeploy it.
+- **The marker check.** `preview-base` carries a marker (the comment `dot-preview-base` on its `public` schema), and every preview branch inherits it. Before migrating, preview and development builds check for it, and the seed checks again. If it's missing, the build fails with "this database is not a copy of preview-base". That means the Preview or Development database variables point at a database that didn't come from `preview-base`, possibly production; check them before redeploying. Production builds never check it, and `main` must never have it.
+- **Setup.** `preview-base` is emptied and marked once, by hand, with [`scripts/empty-preview-base.sql`](scripts/empty-preview-base.sql). It stops without changing anything if it finds migration history or any rows, so run on `main` by mistake it does nothing. The one-time owner setup is the numbered "Owner setup" list under "Preview databases" in [`specs/m1-skeleton.md`](specs/m1-skeleton.md).
 
 Rollback: code through Vercel's Instant Rollback to the previous deployment; data through Neon's restore to a time before the deploy. The current Neon plan keeps 6 hours of history, so check each deploy straight away.
 
