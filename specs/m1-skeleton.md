@@ -111,6 +111,19 @@ Stick to the product spec's stack and keep every hosting choice swappable.
   - First preview, 2026-10-25: PR #10 (`00674d2`) got `preview/t-7-neon-preview-branches` from `preview-base`; the build passed the marker check, applied the migration and seeded the demo user, workspace and project, and the log showed no URL, host or password.
   - First production deploy with the integration, 2026-10-25: merge of #10 (`5d8823f`) migrated `main` (already current) and skipped the seed; `main` still has its 14 tables, no demo rows and no marker; the health ping answers `ok`. The preview's Neon branch is deleted by the integration at the next preview deploy.
   - Rollback: in Neon → Integrations, disconnect Vercel; set the hand-set pair again in Vercel, **Production scope only**, as in T-6; set `main` as the default branch. Nothing in T-7 changes `main`'s data or schema.
+- **Sign-in (T-8, decided 2026-10-25):**
+  - Auth.js v5 (`next-auth`, pinned to exactly `5.0.0-beta.32`: still a beta, but the release that supports Next 16 and matches `@auth/drizzle-adapter`) with the GitHub provider and database sessions in the existing Auth.js tables.
+  - The adapter is wrapped: `createUser` sets `github_id`, name and `avatar_url` from the GitHub profile and drops the email; `linkAccount` drops every token field. The database CHECKs reject any email or token that slips through. Auth.js gets its own logger that records error names and codes only.
+  - Every page needs a session except `/sign-in` and `/privacy`. Signed out, a page redirects to `/sign-in`, carrying only a same-site relative return path. Next 16's `proxy.ts` does the redirect, but pages, layouts and tRPC check the session on the server too; the proxy is never the only check. tRPC gets a `protectedProcedure` (`UNAUTHORIZED` when signed out); `health.ping` stays public.
+  - Sign out deletes that device's session row (Auth.js's CSRF-protected sign-out).
+  - Rate limits in Postgres (REQ-1): a `rate_limit` table keyed by an HMAC of the caller's IP and the bucket name (never the raw IP), counting fixed one-minute windows in one upsert per request; rows older than a day are deleted. Buckets: Auth.js sign-in and callback routes 10 per minute per IP; signed-out tRPC calls 60 per minute per IP. If the limiter can't run (database error, or no answer within 2 seconds), the request gets a 503: it fails closed. The HMAC key is derived from `AUTH_SECRET`.
+  - The caller's IP comes only from the header named in `TRUSTED_IP_HEADER` (`x-real-ip` on Vercel, set by the owner). Unset, every caller shares one bucket, so it fails safe on hosts without a trusted proxy (REQ-7: no Vercel-only code).
+  - `/privacy` lists what is kept: GitHub id, name and avatar URL; the session cookie and session row; the keyed IP hash for rate limiting, deleted within a day. It also says what isn't kept (no email, no GitHub tokens, no analytics) and where it is hosted (Vercel, Neon in US East). Live before sign-in is.
+  - UI: `/sign-in` with one "Sign in with GitHub" button and a link to `/privacy`; a signed-in header with initials, name and "Sign out"; a placeholder home until T-9. Avatars are stored but not shown yet, so pages still load nothing from outside hosts.
+  - Previews have no sign-in: the `AUTH_*` variables are Production only (and local), so no production secret reaches a preview. Without them the sign-in page says sign-in works on production and locally, and builds still pass.
+  - Owner setup: two GitHub OAuth Apps. Production: homepage `https://dev-ops-tracker-2r9n.vercel.app`, callback `https://dev-ops-tracker-2r9n.vercel.app/api/auth/callback/github`. Local: callback `http://localhost:3000/api/auth/callback/github`. Vercel Production gets `AUTH_SECRET`, `AUTH_GITHUB_ID` and `AUTH_GITHUB_SECRET` (Sensitive) and `TRUSTED_IP_HEADER=x-real-ip`; `.env.local` gets the local app's values. `.env.example` lists the names.
+  - Not now: hashing session tokens at rest (optional per the T-5 review; a database leak is already worse), avatars, preview sign-in.
+  - The `rate_limit` migration only adds a table (forward-only). Rollback: Vercel Instant Rollback; the table can stay.
 - **Notes for later tasks (from the T-5 and T-6 reviews, 2026-10-16):**
   - T-8: wrap the adapter's `createUser` (set `github_id`, drop email) and `linkAccount` (drop tokens), with tests; give Auth.js its own logger that records error names and codes only, since Drizzle errors carry query values; hashing session tokens at rest is optional.
   - T-10: invite tokens from `randomBytes(32)` (base64url), looked up through the unique index; consider storing a hash.
@@ -132,7 +145,7 @@ Twelve tasks, in build order. Until the app can track itself (M2), this table is
 | T-5 | Write the Drizzle schema for all v1 tables and the first migration | REQ-5 | M | Done |
 | T-6 | Link the repo to a Vercel project, set env vars, run migrations on deploy | REQ-6 | S | Done |
 | T-7 | Turn on Neon branches for Vercel preview deploys | REQ-6 | S | Done |
-| T-8 | Add GitHub sign-in, sign-out, protected pages and rate limits | REQ-1 | M | Todo |
+| T-8 | Add GitHub sign-in, sign-out, protected pages and rate limits | REQ-1 | M | Doing |
 | T-9 | Create a workspace on first sign-in, plus rename | REQ-2 | S | Todo |
 | T-10 | Build invite links and the members list | REQ-3 | M | Todo |
 | T-11 | Build projects: create, sidebar list, rename, archive | REQ-4 | M | Todo |
