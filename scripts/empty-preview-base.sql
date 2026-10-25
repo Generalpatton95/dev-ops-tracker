@@ -12,7 +12,7 @@
 -- run on a database without it (scripts/preview-base-lib.mjs). `main` must never have it.
 --
 -- Where to run it: Neon console -> SQL Editor, with the `preview-base` branch selected, as the
--- same role you will pick in the Neon Vercel integration (normally `neondb_owner`). Never on
+-- same role you will pick in the Neon Vercel integration (for this project `dev_ops_tracker_owner`, the database's owner). Never on
 -- `main`.
 --
 -- Safety: it is ONE statement (a DO block), so any error aborts all of it. It first checks for

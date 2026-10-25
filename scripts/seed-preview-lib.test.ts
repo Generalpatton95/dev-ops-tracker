@@ -311,7 +311,7 @@ describe("empty-preview-base.sql", () => {
     const header = text.slice(0, text.indexOf("DO $$"));
     expect(header).toContain("preview-base");
     expect(header).toContain("SQL Editor");
-    expect(header).toContain("neondb_owner");
+    expect(header).toContain("dev_ops_tracker_owner");
     expect(header).toContain(PREVIEW_BASE_MARKER);
     expect(header).toMatch(/on `main`[^]*MUST fail/);
   });
