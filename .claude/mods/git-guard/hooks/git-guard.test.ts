@@ -54,6 +54,13 @@ describe("findDestructiveGit: blocked forms", () => {
     ["git rm --forc x"],
     ["git checkout-index --forc -a"],
     ["git restore --staged --work ."],
+    ["git merge --abort"],
+    ["git am --abort"],
+    ["git cherry-pick --abort"],
+    ["git revert --abort"],
+    ["git rebase --abort"],
+    ["git worktree remove --force ../copy"],
+    ["git worktree remove -f ../copy"],
   ];
   for (const [cmd, dialect] of blocked) {
     test(`blocks: ${cmd}`, () => {
@@ -75,6 +82,11 @@ describe("findDestructiveGit: allowed forms", () => {
     "git clean -n",
     "git clean -fdn",
     "git stash list",
+    "git merge --no-ff feature",
+    "git rebase --continue",
+    "git worktree remove ../copy",
+    "git worktree add ../copy main",
+    "git worktree list",
     "git rm --cached -f x",
     "git log --oneline",
     "echo reset --hard",
@@ -130,6 +142,9 @@ describe("what it reports", () => {
   });
   test("keeps backticks in a cd target so it reads as unresolvable", () => {
     expect(findDestructiveGit("cd `echo /c/other`; git reset --hard")?.cwd).toContain("`");
+  });
+  test("can't check a forced worktree removal", () => {
+    expect(findDestructiveGit("git worktree remove --force ../copy")?.cannotCheck).toBeDefined();
   });
   test("can't check past the nesting limit", () => {
     let cmd = "git reset --hard";
