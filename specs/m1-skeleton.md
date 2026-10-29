@@ -124,6 +124,7 @@ Stick to the product spec's stack and keep every hosting choice swappable.
   - Previews have no sign-in: the `AUTH_*` variables are Production only (and local), so no production secret reaches a preview. Without them the sign-in page says sign-in works on production and locally, and builds still pass.
   - Owner setup: two GitHub OAuth Apps. Production: homepage `https://dev-ops-tracker-2r9n.vercel.app`, callback `https://dev-ops-tracker-2r9n.vercel.app/api/auth/callback/github`. Local: callback `http://localhost:3000/api/auth/callback/github`. Vercel Production gets `AUTH_SECRET`, `AUTH_GITHUB_ID` and `AUTH_GITHUB_SECRET` (Sensitive) and `TRUSTED_IP_HEADER=x-real-ip`; `.env.local` gets the local app's values. `.env.example` lists the names.
   - Known gap (accepted 2026-10-25, revisit before launch): requests carrying a session cookie, even a junk one, cost one indexed session lookup without a rate limit, and a CSRF-checked sign-out costs one delete.
+  - First production sign-in, 2026-10-28: merge of #14 (`886734c`) applied migration `0001` on `main`; the owner signed in, out and in again. Checked by counts only: one user with a GitHub id and no email, one account with no tokens, one session (the signed-out one deleted) expiring in 30 days, one hashed rate-limit row. Rollback: Vercel Instant Rollback; `rate_limit` can stay.
   - Not now: hashing session tokens at rest (optional per the T-5 review; a database leak is already worse), avatars, preview sign-in.
   - The `rate_limit` migration only adds a table (forward-only). Rollback: Vercel Instant Rollback; the table can stay.
 - **Notes for later tasks (from the T-5 and T-6 reviews, 2026-10-16):**
@@ -148,7 +149,7 @@ Twelve tasks, in build order. Until the app can track itself (M2), this table is
 | T-5 | Write the Drizzle schema for all v1 tables and the first migration | REQ-5 | M | Done |
 | T-6 | Link the repo to a Vercel project, set env vars, run migrations on deploy | REQ-6 | S | Done |
 | T-7 | Turn on Neon branches for Vercel preview deploys | REQ-6 | S | Done |
-| T-8 | Add GitHub sign-in, sign-out, protected pages and rate limits | REQ-1 | M | Review |
+| T-8 | Add GitHub sign-in, sign-out, protected pages and rate limits | REQ-1 | M | Done |
 | T-9 | Create a workspace on first sign-in, plus rename | REQ-2 | S | Todo |
 | T-10 | Build invite links and the members list | REQ-3 | M | Todo |
 | T-11 | Build projects: create, sidebar list, rename, archive | REQ-4 | M | Todo |
