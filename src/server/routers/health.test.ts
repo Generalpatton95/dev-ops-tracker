@@ -9,4 +9,9 @@ describe("health.ping", () => {
     const caller = createCaller(await createTRPCContext());
     await expect(caller.health.ping()).resolves.toEqual({ status: "ok" });
   });
+
+  it("REQ-1: stays public: it answers with no session", async () => {
+    const caller = createCaller(await createTRPCContext({ session: null }));
+    await expect(caller.health.ping()).resolves.toEqual({ status: "ok" });
+  });
 });

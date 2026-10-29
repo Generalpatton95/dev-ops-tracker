@@ -58,6 +58,7 @@ const TABLES = [
   "cycle",
   "membership",
   "project",
+  "rate_limit",
   "requirement",
   "requirement_version",
   "session",

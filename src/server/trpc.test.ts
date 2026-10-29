@@ -1,6 +1,12 @@
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { describe, expect, it } from "vitest";
-import { createTRPCContext, createTRPCRouter, publicProcedure } from "@/server/trpc";
+import {
+  createCallerFactory,
+  createTRPCContext,
+  createTRPCRouter,
+  protectedProcedure,
+  publicProcedure,
+} from "@/server/trpc";
 
 const testRouter = createTRPCRouter({
   boom: publicProcedure.query(() => {
@@ -14,7 +20,7 @@ describe("error formatting", () => {
       endpoint: "/api/trpc",
       req: new Request("http://localhost/api/trpc/boom"),
       router: testRouter,
-      createContext: createTRPCContext,
+      createContext: () => createTRPCContext(),
     });
     const body = await res.text();
 
@@ -22,5 +28,34 @@ describe("error formatting", () => {
     expect(body).toContain("Internal server error");
     expect(body).not.toContain("relation");
     expect(body).not.toContain("stack");
+  });
+});
+
+describe("protectedProcedure", () => {
+  const router = createTRPCRouter({
+    whoami: protectedProcedure.query(({ ctx }) => ({ id: ctx.session.user.id })),
+  });
+  const createCaller = createCallerFactory(router);
+  const session = { user: { id: "u-1", name: "Octo" }, expires: "2026-11-24T00:00:00.000Z" };
+
+  it("REQ-1: answers UNAUTHORIZED when signed out", async () => {
+    const caller = createCaller(await createTRPCContext());
+    await expect(caller.whoami()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+  });
+
+  it("REQ-1: answers UNAUTHORIZED over HTTP too, with a plain message", async () => {
+    const res = await fetchRequestHandler({
+      endpoint: "/api/trpc",
+      req: new Request("http://localhost/api/trpc/whoami"),
+      router,
+      createContext: () => createTRPCContext(),
+    });
+    expect(res.status).toBe(401);
+    expect(await res.text()).toContain("Sign in first.");
+  });
+
+  it("REQ-1: runs with the server-side session when signed in", async () => {
+    const caller = createCaller(await createTRPCContext({ session }));
+    await expect(caller.whoami()).resolves.toEqual({ id: "u-1" });
   });
 });

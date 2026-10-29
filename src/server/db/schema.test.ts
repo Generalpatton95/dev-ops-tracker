@@ -23,6 +23,7 @@ const EXPECTED_TABLES = [
   "cycle",
   "membership",
   "project",
+  "rate_limit",
   "requirement",
   "requirement_version",
   "session",
@@ -138,7 +139,7 @@ describe.skipIf(!target.run)("REQ-5: v1 schema in Postgres", () => {
 
   // ---------- Tables ----------
 
-  it("REQ-5: migrations create every v1 table and the Auth.js tables", async () => {
+  it("REQ-5: migrations create every v1 table, the Auth.js tables and the rate-limit table", async () => {
     const result = await db.execute<{ table_name: string }>(sql`
       select table_name from information_schema.tables
       where table_schema = 'public' and table_type = 'BASE TABLE'
