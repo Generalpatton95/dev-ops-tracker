@@ -21,8 +21,8 @@ Eight requirements, each written as a rule with checks that prove it works. Task
 
 **REQ-2 Workspace on first sign-in.** Every user lands in a workspace they own.
 
-- [ ] First sign-in creates a workspace with the user as owner.
-- [ ] The owner can rename the workspace.
+- [x] First sign-in creates a workspace with the user as owner.
+- [x] The owner can rename the workspace.
 
 **REQ-3 Invite teammates.** An owner can bring teammates into the workspace.
 
@@ -71,7 +71,7 @@ Stick to the product spec's stack and keep every hosting choice swappable.
 - **Security baseline:** pages send headers that block framing by other sites, and load nothing from outside hosts (no Google Fonts). The tRPC route caps batches at 10 calls and request bodies at 100KB, and unexpected server errors reach the client as a generic message.
 - **Known gaps (from the T-2 security review, 2026-10-15):**
   - No rate limiting yet. The only public call is a health ping, and a correct limiter needs shared storage (Postgres, T-5). Now a REQ-1 check, built in T-8. (Closed by T-8: Postgres rate limits.)
-  - The body cap trusts the `Content-Length` header. Count bytes while reading once the first mutation lands.
+  - The body cap trusts the `Content-Length` header. Count bytes while reading once mutations carry real payloads. T-9's rename is the first mutation but small (Node also checks the body against `Content-Length`); moved to T-10, when invites add more (decided 2026-10-28).
   - The CSP only covers framing; a nonce-based `script-src` can come later.
 - **Audit exception:** `braces` ≤3.0.3 (GHSA-vfj7-8cjw-p6xm, high, no patch) comes only through `eslint-config-next`, a dev-only lint tool that never ships and only reads our own glob patterns. Ignored by advisory ID in `pnpm-workspace.yaml`, so CI still fails on any new finding. Recheck at each release.
 - **Schema (T-5, decided 2026-10-16):** the node-postgres (`pg`) driver, which works through Neon's pooler. UUID keys, Postgres enums for the fixed sets, timestamps with time zone, indexed foreign keys. Migrations use `DATABASE_URL_UNPOOLED` when set, else `DATABASE_URL`. CI applies them to a throwaway Postgres; local tests use `TEST_DATABASE_URL` when it's set. The rate-limit table comes with T-8.
@@ -128,9 +128,10 @@ Stick to the product spec's stack and keep every hosting choice swappable.
   - Not now: hashing session tokens at rest (optional per the T-5 review; a database leak is already worse), avatars, preview sign-in.
   - The `rate_limit` migration only adds a table (forward-only). Rollback: Vercel Instant Rollback; the table can stay.
 - **Workspaces (T-9, decided 2026-10-28):**
-  - A signed-in user always has a workspace they own. The server ensures it on every signed-in page: if the user owns none, it creates one with an `owner` membership in one transaction, under a per-user advisory lock, so two tabs never make two. This covers new users, accounts that signed in before T-9 (the owner's) and half-finished sign-ins. Sign-in itself is unchanged.
+  - A signed-in user always has a workspace they own. The server ensures it on every signed-in page: one indexed lookup finds the owned workspace; only if there is none does it open a transaction, take a per-user advisory lock, look again and create the workspace with an `owner` membership, so two tabs never make two. This covers new users, accounts that signed in before T-9 (the owner's) and half-finished sign-ins. Sign-in itself is unchanged.
   - The default name is "<GitHub name>'s workspace", cut to fit 50 characters, or "My workspace" when the name is blank.
   - Names: trimmed, 1 to 50 characters, any text, checked on the server with Zod and always rendered as text.
+  - Names refuse control characters and bidi controls, so a name can't hide text or reverse it for other members.
   - In M1 the current workspace is the one the user owns. (T-10 adds membership of other workspaces; a switcher comes when it's needed.)
   - tRPC: `workspace.current` (name and the caller's role) and `workspace.rename` (owner only), both `protectedProcedure`. Anyone else, or an unknown workspace id, gets the same `NOT_FOUND`.
   - UI: the home page shows the workspace name; the header links to `/settings`, a protected page with the name field and Save. T-10 adds invites and members there.
@@ -158,7 +159,7 @@ Twelve tasks, in build order. Until the app can track itself (M2), this table is
 | T-6 | Link the repo to a Vercel project, set env vars, run migrations on deploy | REQ-6 | S | Done |
 | T-7 | Turn on Neon branches for Vercel preview deploys | REQ-6 | S | Done |
 | T-8 | Add GitHub sign-in, sign-out, protected pages and rate limits | REQ-1 | M | Done |
-| T-9 | Create a workspace on first sign-in, plus rename | REQ-2 | S | Doing |
+| T-9 | Create a workspace on first sign-in, plus rename | REQ-2 | S | Review |
 | T-10 | Build invite links and the members list | REQ-3 | M | Todo |
 | T-11 | Build projects: create, sidebar list, rename, archive | REQ-4 | M | Todo |
 | T-12 | Check the app runs locally on plain Postgres | REQ-7 | S | Todo |

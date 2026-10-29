@@ -1,5 +1,6 @@
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { getCurrentSession } from "@/server/auth";
+import { getDb } from "@/server/db";
 import { checkRateLimit, rateLimitResponse } from "@/server/rate-limit";
 import { appRouter } from "@/server/routers/_app";
 import { createTRPCContext } from "@/server/trpc";
@@ -51,7 +52,7 @@ async function handler(req: Request) {
     endpoint: ENDPOINT,
     req,
     router: appRouter,
-    createContext: () => createTRPCContext({ session }),
+    createContext: () => createTRPCContext({ session, db: getDb }),
     maxBatchSize: MAX_BATCH_SIZE,
     onError({ path, error }) {
       // The path comes from the URL, so strip it to safe characters and cap it: no forged log lines.
