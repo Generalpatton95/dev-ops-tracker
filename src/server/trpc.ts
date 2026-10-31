@@ -1,10 +1,18 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import type { AppSession } from "@/server/auth/config";
+import type { Database } from "@/server/db";
 
 // Per-request context. The route looks the session up on the server (T-8, REQ-1) and passes it
-// in; nothing the client sends can set it.
-export async function createTRPCContext(opts: { session?: AppSession | null } = {}) {
-  return { session: opts.session ?? null };
+// in; nothing the client sends can set it. The route also passes the app's database (T-9); it is
+// a function so procedures that don't need it never connect. Tests pass their own.
+export async function createTRPCContext(
+  opts: { session?: AppSession | null; db?: () => Database } = {},
+) {
+  return { session: opts.session ?? null, db: opts.db ?? noDatabase };
+}
+
+function noDatabase(): never {
+  throw new Error("No database in this tRPC context");
 }
 
 type Context = Awaited<ReturnType<typeof createTRPCContext>>;

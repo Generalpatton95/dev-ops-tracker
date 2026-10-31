@@ -80,6 +80,19 @@ describe("REQ-1: signed-out page visits", () => {
     expect(returnPathFromHeaders(new Headers())).toBe("/");
   });
 
+  it("REQ-2: the settings page is protected: signed out, it redirects to sign-in", () => {
+    expect(unstable_doesMiddlewareMatch({ config, url: "/settings" })).toBe(true);
+    const res = visit("/settings");
+    expect(res.status).toBe(307);
+    const location = new URL(res.headers.get("location")!);
+    expect(location.pathname).toBe("/sign-in");
+    expect(location.searchParams.get("callbackUrl")).toBe("/settings");
+    // With a session cookie it reaches the page's own session check.
+    expect(visit("/settings", "authjs.session-token=abc").headers.get("x-middleware-next")).toBe(
+      "1",
+    );
+  });
+
   it("REQ-1: the proxy runs on pages, not on API routes or Next's static files", () => {
     const matches = (url: string) => unstable_doesMiddlewareMatch({ config, url });
     for (const url of ["/", "/projects", "/sign-in", "/privacy", "/apidocs"]) {
