@@ -136,6 +136,7 @@ Stick to the product spec's stack and keep every hosting choice swappable.
   - tRPC: `workspace.current` (name and the caller's role) and `workspace.rename` (owner only), both `protectedProcedure`. Anyone else, or an unknown workspace id, gets the same `NOT_FOUND`.
   - UI: the home page shows the workspace name; the header links to `/settings`, a protected page with the name field and Save. T-10 adds invites and members there.
   - No migration: the `workspace` and `membership` tables exist. Nothing new is public, so no new rate-limit bucket.
+  - Live on production, 2026-10-30: merge of #16 (`5da1280`); the owner saw the workspace and renamed it on `/settings`. Checked by counts only: one user, one workspace (renamed), one membership with role `owner`, no user without exactly one owned workspace. Rollback: Vercel Instant Rollback; no schema change to undo.
 - **Notes for later tasks (from the T-5 and T-6 reviews, 2026-10-16):**
   - T-8: wrap the adapter's `createUser` (set `github_id`, drop email) and `linkAccount` (drop tokens), with tests; give Auth.js its own logger that records error names and codes only, since Drizzle errors carry query values; hashing session tokens at rest is optional.
   - T-10: invite tokens from `randomBytes(32)` (base64url), looked up through the unique index; consider storing a hash.
@@ -159,7 +160,7 @@ Twelve tasks, in build order. Until the app can track itself (M2), this table is
 | T-6 | Link the repo to a Vercel project, set env vars, run migrations on deploy | REQ-6 | S | Done |
 | T-7 | Turn on Neon branches for Vercel preview deploys | REQ-6 | S | Done |
 | T-8 | Add GitHub sign-in, sign-out, protected pages and rate limits | REQ-1 | M | Done |
-| T-9 | Create a workspace on first sign-in, plus rename | REQ-2 | S | Review |
+| T-9 | Create a workspace on first sign-in, plus rename | REQ-2 | S | Done   |
 | T-10 | Build invite links and the members list | REQ-3 | M | Todo |
 | T-11 | Build projects: create, sidebar list, rename, archive | REQ-4 | M | Todo |
 | T-12 | Check the app runs locally on plain Postgres | REQ-7 | S | Todo |
