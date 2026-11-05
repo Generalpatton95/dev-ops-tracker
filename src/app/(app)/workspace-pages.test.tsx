@@ -16,6 +16,7 @@ vi.mock("@/server/workspace/current", () => ({
     calls++;
     return result;
   },
+  getWorkspaceChoices: async () => (result.ok ? [result.workspace] : null),
 }));
 
 const { SignedInHeader } = await import("./signed-in-header");

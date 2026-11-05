@@ -31,6 +31,15 @@ describe("REQ-1: signed-out page visits", () => {
     expect(visit("/").headers.get("location")).toBe(`${ORIGIN}/sign-in`);
   });
 
+  it("REQ-3: a signed-out visit to an invite link goes to sign-in and comes back to the link after", () => {
+    const path = `/invite/${"Ab0_-".repeat(8)}xyz`;
+    const res = visit(path);
+    expect(res.status).toBe(307);
+    const location = new URL(res.headers.get("location")!);
+    expect(location.pathname).toBe("/sign-in");
+    expect(location.searchParams.get("callbackUrl")).toBe(path);
+  });
+
   it("REQ-1: a request path that would be a protocol-relative URL is not carried over", () => {
     expect(signedOutRedirect({ pathname: "//evil.example", search: "" }, () => false)).toBe(
       "/sign-in",

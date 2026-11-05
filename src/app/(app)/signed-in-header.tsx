@@ -2,11 +2,13 @@
 // image yet, so pages still load nothing from outside hosts.
 // T-9 (REQ-2): it also makes sure the user owns a workspace (so every signed-in page has one)
 // and links to the settings page.
+// T-10 (REQ-3): and shows the current workspace, with a switcher when the user is in several.
 import Link from "next/link";
 import { SignOutButton } from "@/app/auth-buttons";
 import { requireSession } from "@/server/auth";
-import { getCurrentWorkspace } from "@/server/workspace/current";
+import { getCurrentWorkspace, getWorkspaceChoices } from "@/server/workspace/current";
 import { initials } from "./initials";
+import { WorkspaceSwitcher } from "./workspace-switcher";
 
 function HeaderFrame({ children }: { children?: React.ReactNode }) {
   return (
@@ -29,10 +31,19 @@ export async function SignedInHeader() {
   const { user } = await requireSession();
   // Creates the workspace if the user owns none. Cached per render, so the page's own call
   // reuses it; if it fails, the page shows the error state and the header still renders.
-  await getCurrentWorkspace();
+  const current = await getCurrentWorkspace();
+  // A second query for the switcher's list. The two could become one (the list already holds
+  // the current workspace); left for later, from the T-10 code review.
+  const choices = current.ok ? await getWorkspaceChoices() : null;
   return (
     <HeaderFrame>
       <div className="flex items-center gap-3">
+        {current.ok && (
+          <WorkspaceSwitcher
+            currentId={current.workspace.id}
+            workspaces={choices ?? [current.workspace]}
+          />
+        )}
         <Link href="/settings" className="text-sm underline-offset-2 hover:underline">
           Settings
         </Link>

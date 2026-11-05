@@ -26,9 +26,9 @@ Eight requirements, each written as a rule with checks that prove it works. Task
 
 **REQ-3 Invite teammates.** An owner can bring teammates into the workspace.
 
-- [ ] The owner can create an invite link and turn it off.
-- [ ] A signed-in user who opens a working link joins as a member.
-- [ ] The owner can see all members and remove any member.
+- [x] The owner can create an invite link and turn it off.
+- [x] A signed-in user who opens a working link joins as a member.
+- [x] The owner can see all members and remove any member.
 
 **REQ-4 Projects.** Members can create and manage projects inside a workspace.
 
@@ -64,14 +64,14 @@ Stick to the product spec's stack and keep every hosting choice swappable.
 - **Stack:** Next.js (App Router) + TypeScript + Tailwind, tRPC for app calls, Drizzle for the database, Auth.js with the GitHub provider.
 - **Database access:** connect with the standard Postgres driver through `DATABASE_URL`, so Neon is just one place it can point.
 - **Sessions:** stored in Postgres through the Auth.js Drizzle adapter, not in a hosted key-value store.
-- **Invite links:** a random token saved on the workspace; turning the link off clears the token.
+- **Invite links:** a random token whose hash is saved on the workspace; turning the link off clears it. (Hash decided 2026-11-02, see Invites.)
 - **Project keys:** checked on the server, saved in capitals, and fixed once tasks exist (M2), since task IDs like DOT-12 use them.
 - **Preview databases:** set up through the Neon and Vercel integration, so this lives in deploy config, not app code.
 - **Tooling:** pnpm, Vitest for tests, ESLint (Next's rules) plus Prettier with Tailwind class sorting. Decided 2026-10-15.
 - **Security baseline:** pages send headers that block framing by other sites, and load nothing from outside hosts (no Google Fonts). The tRPC route caps batches at 10 calls and request bodies at 100KB, and unexpected server errors reach the client as a generic message.
 - **Known gaps (from the T-2 security review, 2026-10-15):**
   - No rate limiting yet. The only public call is a health ping, and a correct limiter needs shared storage (Postgres, T-5). Now a REQ-1 check, built in T-8. (Closed by T-8: Postgres rate limits.)
-  - The body cap trusts the `Content-Length` header. Count bytes while reading once mutations carry real payloads. T-9's rename is the first mutation but small (Node also checks the body against `Content-Length`); moved to T-10, when invites add more (decided 2026-10-28).
+  - The body cap trusts the `Content-Length` header. Count bytes while reading once mutations carry real payloads. T-9's rename is the first mutation but small (Node also checks the body against `Content-Length`); moved to T-10, when invites add more (decided 2026-10-28). (Closed by T-10.)
   - The CSP only covers framing; a nonce-based `script-src` can come later.
 - **Audit exception:** `braces` ≤3.0.3 (GHSA-vfj7-8cjw-p6xm, high, no patch) comes only through `eslint-config-next`, a dev-only lint tool that never ships and only reads our own glob patterns. Ignored by advisory ID in `pnpm-workspace.yaml`, so CI still fails on any new finding. Recheck at each release.
 - **Schema (T-5, decided 2026-10-16):** the node-postgres (`pg`) driver, which works through Neon's pooler. UUID keys, Postgres enums for the fixed sets, timestamps with time zone, indexed foreign keys. Migrations use `DATABASE_URL_UNPOOLED` when set, else `DATABASE_URL`. CI applies them to a throwaway Postgres; local tests use `TEST_DATABASE_URL` when it's set. The rate-limit table comes with T-8.
@@ -137,6 +137,20 @@ Stick to the product spec's stack and keep every hosting choice swappable.
   - UI: the home page shows the workspace name; the header links to `/settings`, a protected page with the name field and Save. T-10 adds invites and members there.
   - No migration: the `workspace` and `membership` tables exist. Nothing new is public, so no new rate-limit bucket.
   - Live on production, 2026-10-30: merge of #16 (`5da1280`); the owner saw the workspace and renamed it on `/settings`. Checked by counts only: one user, one workspace (renamed), one membership with role `owner`, no user without exactly one owned workspace. Rollback: Vercel Instant Rollback; no schema change to undo.
+- **Invites (T-10, decided 2026-11-02):**
+  - The owner makes an invite link on `/settings`. The token is `randomBytes(32)` in base64url; the database keeps only its SHA-256 hash, in the existing `workspace.invite_token` column, looked up through its unique index. No migration.
+  - The link is shown once, when it's made, with a Copy button. Making a new link replaces the old one; "Turn off link" clears the hash. Links don't expire on their own.
+  - `/invite/<token>` is a protected page: signed out, it goes to `/sign-in` and comes back after. Signed in, it shows "Join <workspace name>" and a Join button. Joining happens only on that click (a POST), so link previews and prefetches never join anyone.
+  - Joining adds a `member` membership and switches you to that workspace. If you're already in it, it just switches. A wrong, malformed or turned-off token gets the same neutral "This invite link isn't working. Ask the owner for a new one."
+  - Rate limits: looking up and joining invites share a bucket of 10 per minute per signed-in user (keyed by an HMAC of the user id, in the existing `rate_limit` table), failing closed like the others.
+  - The token travels in the URL path, so it can show up in the host's request logs. Accepted: turning the link off or making a new one ends it.
+  - Current workspace: a header switcher lists your workspaces. The choice is kept in an httpOnly, SameSite=Lax cookie holding the workspace id; the server checks your membership on every request and falls back to the workspace you own when the cookie is missing, wrong or you've been removed.
+  - Rename, invites and members act on the current workspace, owner only. Members see the workspace name on `/settings` without the owner's controls.
+  - Members list (owner only): name, role and join date for each member, with Remove on everyone but the owner. Removing deletes that membership and turns off the invite link in the same step, so the removed person can't rejoin with it; Settings says so (decided 2026-11-02, from the T-10 reviews). The owner can't be removed. Anyone else, or an unknown id, gets the same `NOT_FOUND`.
+  - tRPC, all `protectedProcedure`: `workspace.list`, `workspace.switch`, `workspace.createInvite`, `workspace.disableInvite`, `workspace.members`, `workspace.removeMember`, `invite.preview`, `invite.join`.
+  - The tRPC body cap now counts bytes while reading instead of trusting `Content-Length` (closes the known gap).
+  - `/privacy` adds: if you join a workspace, its owner sees your GitHub name and when you joined; the `dot-workspace` cookie (a workspace id, kept up to a year); and that invite attempts are counted by a keyed hash of your user id. No new kind of data is collected.
+  - The tRPC route takes only `application/json` POSTs, so a plain cross-site form can't reach a mutation even without SameSite (from the T-10 security review, 2026-11-02).
 - **Notes for later tasks (from the T-5 and T-6 reviews, 2026-10-16):**
   - T-8: wrap the adapter's `createUser` (set `github_id`, drop email) and `linkAccount` (drop tokens), with tests; give Auth.js its own logger that records error names and codes only, since Drizzle errors carry query values; hashing session tokens at rest is optional.
   - T-10: invite tokens from `randomBytes(32)` (base64url), looked up through the unique index; consider storing a hash.
@@ -161,7 +175,7 @@ Twelve tasks, in build order. Until the app can track itself (M2), this table is
 | T-7 | Turn on Neon branches for Vercel preview deploys | REQ-6 | S | Done |
 | T-8 | Add GitHub sign-in, sign-out, protected pages and rate limits | REQ-1 | M | Done |
 | T-9 | Create a workspace on first sign-in, plus rename | REQ-2 | S | Done   |
-| T-10 | Build invite links and the members list | REQ-3 | M | Todo |
+| T-10 | Build invite links and the members list | REQ-3 | M | Review |
 | T-11 | Build projects: create, sidebar list, rename, archive | REQ-4 | M | Todo |
 | T-12 | Check the app runs locally on plain Postgres | REQ-7 | S | Todo |
 

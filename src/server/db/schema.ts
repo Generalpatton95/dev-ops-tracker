@@ -52,7 +52,8 @@ export const workspaces = pgTable(
   {
     id: id(),
     name: text("name").notNull(),
-    // Random invite link token; turning the link off sets it to null (REQ-3).
+    // The SHA-256 (hex) of the invite link's random token, never the token itself (T-10,
+    // src/server/invite/token.ts); turning the link off sets it to null (REQ-3).
     inviteToken: text("invite_token"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
