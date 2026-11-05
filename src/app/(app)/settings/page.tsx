@@ -1,6 +1,6 @@
 // T-9 (REQ-2): workspace settings. Protected like every app page: the proxy redirects signed-out
-// visits, and getCurrentWorkspace() checks the session on the server too. T-10 adds invites and
-// members here.
+// visits, and getCurrentWorkspace() checks the session on the server too. T-10 (REQ-3) adds the
+// owner's invite link and members list.
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { WorkspaceSettings } from "./workspace-settings";

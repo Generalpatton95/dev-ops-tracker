@@ -23,6 +23,7 @@ const {
   clientIp,
   rateLimitKey,
   rateLimitResponse,
+  userRateLimitKey,
 } = await import("./rate-limit");
 
 const SECRET = "test-secret-not-real-0123456789abcdef";
@@ -105,6 +106,42 @@ describe("REQ-1: rate-limit keys and caller IPs", () => {
       rateLimitKey("trpc-public", "198.51.100.1", env),
     );
     expect(rateLimitKey("trpc-public", null, env)).not.toBe(rateLimitKey("auth", null, env));
+  });
+
+  it("REQ-3: the invite bucket is keyed by an HMAC of the user id, apart from any IP key", async () => {
+    const { createHash } = await import("node:crypto");
+    const userId = "6f1c2f5e-8d1a-4a53-9a43-2b4c1f9e7a10";
+    const key = userRateLimitKey("invite", userId, VERCEL_ENV);
+    expect(key).toMatch(/^[0-9a-f]{64}$/);
+    expect(key).not.toContain(userId.slice(0, 8));
+    for (const plain of [
+      userId,
+      `invite
+user:${userId}`,
+    ]) {
+      expect(key).not.toBe(createHash("sha256").update(plain).digest("hex"));
+    }
+    expect(userRateLimitKey("invite", userId, VERCEL_ENV)).toBe(key);
+    expect(userRateLimitKey("invite", "0b8e4c9a-3f2d-4e71-8c55-7d9a1e2f3b40", VERCEL_ENV)).not.toBe(
+      key,
+    );
+    expect(userRateLimitKey("invite", userId, { AUTH_SECRET: "another-secret" })).not.toBe(key);
+    // An IP that happened to read like the id never shares its row.
+    expect(rateLimitKey("invite", userId, VERCEL_ENV)).not.toBe(key);
+    expect(RATE_LIMITS.invite).toBe(10);
+  });
+
+  it("REQ-3: a per-user count on a bucket that isn't per-user is refused, failing closed", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const result = await checkRateLimit({
+      bucket: "auth",
+      userId: "u-1",
+      headers: new Headers(),
+      env: VERCEL_ENV,
+      db: () => expect.unreachable("no query"),
+    });
+    expect(result).toEqual({ ok: false, status: 503 });
+    expect(log).toHaveBeenCalledTimes(1);
   });
 
   it("REQ-1: refusals are 429 or 503 with no detail and no caching", async () => {
@@ -409,6 +446,29 @@ describe.skipIf(skipReason !== undefined)("REQ-1: rate limits in Postgres", () =
     expect(await present(old)).toBe(false);
     expect(await present(recent)).toBe(true);
     expect(await sessionTokens()).toEqual(["t8-current"]);
+  });
+
+  it("REQ-3: invite lookups allow 10 a minute per signed-in user, whatever their IP, then 429", async () => {
+    const user = (id: string, atMs: number, ip: string) =>
+      hit(ip, atMs, { bucket: "invite", userId: id });
+    const alice = "6f1c2f5e-8d1a-4a53-9a43-2b4c1f9e7a10";
+    const bob = "0b8e4c9a-3f2d-4e71-8c55-7d9a1e2f3b40";
+    const at = T0 + 11 * MINUTE;
+    for (let i = 1; i <= 10; i++) {
+      // A new IP each time makes no difference: the user is counted, not the address.
+      expect(await user(alice, at + i, nextIp())).toEqual({ ok: true, count: i, limit: 10 });
+    }
+    expect(await user(alice, at + 20, nextIp())).toEqual({ ok: false, status: 429 });
+    expect(await user(bob, at + 21, nextIp())).toMatchObject({ ok: true, count: 1 });
+    expect(await user(alice, at + MINUTE, nextIp())).toMatchObject({ ok: true, count: 1 });
+    const rows = await db.execute<{ key: string }>(
+      sql`select key from rate_limit where key = ${userRateLimitKey("invite", alice, VERCEL_ENV)}`,
+    );
+    expect(rows.rows).toHaveLength(1);
+    const all = await db.execute<{ dump: string }>(
+      sql`select string_agg(rate_limit::text, ' ') as dump from rate_limit`,
+    );
+    expect(all.rows[0]?.dump).not.toContain(alice);
   });
 
   it("REQ-1: a clean-up that can't be scheduled never fails the request", async () => {

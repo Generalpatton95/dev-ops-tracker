@@ -10,7 +10,16 @@ import {
   type FreshDatabase,
 } from "@/server/db/fresh-test-database";
 import { memberships, users, workspaces } from "@/server/db/schema";
-import { ensureOwnedWorkspace, renameWorkspace, workspaceLockKey } from "./service";
+import {
+  ensureOwnedWorkspace,
+  inviteLinkActive,
+  listMembers,
+  removeMember,
+  renameWorkspace,
+  resolveCurrentWorkspace,
+  setInviteHash,
+  workspaceLockKey,
+} from "./service";
 
 const INT64_MIN = -(BigInt(2) ** BigInt(63));
 const INT64_MAX = BigInt(2) ** BigInt(63) - BigInt(1);
@@ -222,5 +231,66 @@ describe.skipIf(skipReason !== undefined)("REQ-2: owned workspaces in Postgres",
       await renameWorkspace(fresh.db, ownerId, "00000000-0000-4000-8000-000000000000", "Taken"),
     ).toBeNull();
     expect(await workspaceRow(workspace.id)).toEqual(before);
+  });
+
+  // T-10 (REQ-3): the owner-only reads and writes, checked inside each statement.
+  async function teamWithMember(owner: string, member: string) {
+    const ownerId = await addUser(owner);
+    const workspace = await ensureOwnedWorkspace(fresh.db, ownerId);
+    const memberId = await addUser(member);
+    await fresh.db
+      .insert(memberships)
+      .values({ userId: memberId, workspaceId: workspace.id, role: "member" });
+    return { ownerId, memberId, workspace };
+  }
+
+  it("REQ-3: only the owner learns whether the invite link is on, and only the owner can set it", async () => {
+    const { ownerId, memberId, workspace } = await teamWithMember("Link Keeper", "Link Member");
+    expect(await inviteLinkActive(fresh.db, ownerId, workspace.id)).toBe(false);
+    expect(await setInviteHash(fresh.db, memberId, workspace.id, "a".repeat(64))).toBe(false);
+    expect(await inviteLinkActive(fresh.db, ownerId, workspace.id)).toBe(false);
+    expect(await setInviteHash(fresh.db, ownerId, workspace.id, "b".repeat(64))).toBe(true);
+    expect(await inviteLinkActive(fresh.db, ownerId, workspace.id)).toBe(true);
+    expect(await inviteLinkActive(fresh.db, memberId, workspace.id)).toBeNull();
+    expect(await setInviteHash(fresh.db, ownerId, workspace.id, null)).toBe(true);
+    expect(await inviteLinkActive(fresh.db, ownerId, workspace.id)).toBe(false);
+  });
+
+  it("REQ-3: the members list is the owner's only; a member or stranger gets null", async () => {
+    const { ownerId, memberId, workspace } = await teamWithMember("Roster Keeper", "On Roster");
+    const strangerId = await addUser("Roster Stranger");
+    expect((await listMembers(fresh.db, ownerId, workspace.id))?.map((m) => m.name)).toEqual([
+      "Roster Keeper",
+      "On Roster",
+    ]);
+    expect(await listMembers(fresh.db, memberId, workspace.id)).toBeNull();
+    expect(await listMembers(fresh.db, strangerId, workspace.id)).toBeNull();
+  });
+
+  it("REQ-3: one guarded DELETE removes a member, never the owner's row", async () => {
+    const { ownerId, memberId, workspace } = await teamWithMember("Delete Keeper", "Deleted");
+    const other = await teamWithMember("Other Keeper", "Other Member");
+    expect(await removeMember(fresh.db, memberId, workspace.id, ownerId)).toBe(false);
+    expect(await removeMember(fresh.db, ownerId, workspace.id, ownerId)).toBe(false);
+    // An owner can't reach into another workspace.
+    expect(await removeMember(fresh.db, ownerId, other.workspace.id, other.memberId)).toBe(false);
+    expect(await removeMember(fresh.db, ownerId, workspace.id, memberId)).toBe(true);
+    expect(await removeMember(fresh.db, ownerId, workspace.id, memberId)).toBe(false);
+    expect(await membershipsOf(ownerId)).toEqual([{ workspaceId: workspace.id, role: "owner" }]);
+    expect(await membershipsOf(other.memberId)).toHaveLength(1);
+  });
+
+  it("REQ-3: the current workspace is the cookie's choice only while the user is a member of it", async () => {
+    const { memberId, workspace } = await teamWithMember("Choice Keeper", "Chooser");
+    expect(await resolveCurrentWorkspace(fresh.db, memberId, workspace.id)).toEqual({
+      id: workspace.id,
+      name: workspace.name,
+      role: "member",
+    });
+    await fresh.db.delete(memberships).where(eq(memberships.userId, memberId));
+    const fallback = await resolveCurrentWorkspace(fresh.db, memberId, workspace.id);
+    expect(fallback).toMatchObject({ name: "Chooser's workspace", role: "owner" });
+    expect(await resolveCurrentWorkspace(fresh.db, memberId, "junk")).toEqual(fallback);
+    expect(await resolveCurrentWorkspace(fresh.db, memberId, null)).toEqual(fallback);
   });
 });

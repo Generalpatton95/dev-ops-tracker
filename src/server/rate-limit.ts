@@ -1,6 +1,7 @@
 // T-8 (REQ-1): rate limits for public endpoints, stored in Postgres so every server instance
 // shares them (no hosted key-value store, REQ-7). Fixed one-minute windows, one upsert per
-// request. The row key is an HMAC of the bucket and the caller's IP, never the IP itself.
+// request. The row key is an HMAC of the bucket and the caller's IP, never the IP itself (T-10:
+// or of the bucket and the signed-in user's id, for the per-user invite bucket).
 // Fails closed: if the count can't be read (database error, or no answer within 2 seconds),
 // the caller gets a 503, never a free pass. Windows follow the database's clock, so an app
 // server whose clock runs ahead or behind can't lock callers out or reset their counts.
@@ -19,9 +20,18 @@ export const RATE_LIMITS = {
   auth: 10,
   // tRPC calls made while signed out.
   "trpc-public": 60,
+  // T-10 (REQ-3): looking up and joining invite links, per signed-in user (not per IP).
+  invite: 10,
 } as const;
 
 export type RateLimitBucket = keyof typeof RATE_LIMITS;
+/** Buckets counted per signed-in user rather than per IP. */
+export type UserRateLimitBucket = "invite";
+const USER_BUCKETS: readonly RateLimitBucket[] = ["invite"] satisfies UserRateLimitBucket[];
+
+function isUserBucket(bucket: RateLimitBucket): bucket is UserRateLimitBucket {
+  return USER_BUCKETS.includes(bucket);
+}
 
 export const TIMEOUT_MS = 2_000;
 // After a limited request (at most once every CLEANUP_INTERVAL_MS per server instance, and after
@@ -88,12 +98,25 @@ function ipv6Prefix(value: string): string | null {
  * the hash with, so the IP is left out entirely and everyone shares the bucket.
  */
 export function rateLimitKey(bucket: RateLimitBucket, ip: string | null, env: Env): string {
+  return keyFor(bucket, ip === null ? null : `ip:${ip}`, env);
+}
+
+/**
+ * T-10 (REQ-3): the key for one signed-in user in one bucket: the same HMAC, over the user id
+ * instead of an IP ("user:" and "ip:" prefixes keep the two apart). Without AUTH_SECRET nobody
+ * can be signed in, but the bucket would still be shared rather than keyed by a plain hash.
+ */
+export function userRateLimitKey(bucket: UserRateLimitBucket, userId: string, env: Env): string {
+  return keyFor(bucket, `user:${userId}`, env);
+}
+
+function keyFor(bucket: RateLimitBucket, caller: string | null, env: Env): string {
   const secret = env.AUTH_SECRET;
-  if (!secret || ip === null) {
+  if (!secret || caller === null) {
     return createHash("sha256").update(`${bucket}\nshared`).digest("hex");
   }
   const hmacKey = Buffer.from(hkdfSync("sha256", secret, "", HKDF_INFO, 32));
-  return createHmac("sha256", hmacKey).update(`${bucket}\nip:${ip}`).digest("hex");
+  return createHmac("sha256", hmacKey).update(`${bucket}\n${caller}`).digest("hex");
 }
 
 /** The database's clock, or (tests only) a fixed time standing in for it. */
@@ -150,7 +173,13 @@ function withTimeout<T>(work: () => Promise<T>, ms: number): Promise<T> {
 
 export type RateLimitOptions = {
   bucket: RateLimitBucket;
+  /** The request's headers, for the caller's IP (ignored when `userId` is set). */
   headers: Headers;
+  /**
+   * T-10: count this signed-in user instead of the caller's IP. Only for per-user buckets
+   * (UserRateLimitBucket); with any other bucket the call is refused (503).
+   */
+  userId?: string;
   /** How many calls this request counts as (a tRPC batch counts each call). Default 1. */
   cost?: number;
   env?: Env;
@@ -188,8 +217,17 @@ export async function checkRateLimit(options: RateLimitOptions): Promise<RateLim
   const timeoutMs = options.timeoutMs ?? TIMEOUT_MS;
   const limit = RATE_LIMITS[options.bucket];
   const cost = Math.max(1, Math.min(Math.floor(options.cost ?? 1), limit + 1));
-  warnIfNoIpHeader(env, options.warnings ?? instanceWarnings);
-  const key = rateLimitKey(options.bucket, clientIp(options.headers, env), env);
+  let key: string;
+  if (options.userId !== undefined) {
+    if (!isUserBucket(options.bucket)) {
+      console.error(`rate-limit ${options.bucket}: not a per-user bucket, failed closed`);
+      return { ok: false, status: 503 };
+    }
+    key = userRateLimitKey(options.bucket, options.userId, env);
+  } else {
+    warnIfNoIpHeader(env, options.warnings ?? instanceWarnings);
+    key = rateLimitKey(options.bucket, clientIp(options.headers, env), env);
+  }
 
   let count: number;
   try {
@@ -222,6 +260,11 @@ export async function checkRateLimit(options: RateLimitOptions): Promise<RateLim
 
   if (count > limit) return { ok: false, status: 429 };
   return { ok: true, count, limit };
+}
+
+/** T-10 (REQ-3): counts one call by a signed-in user in a per-user bucket, failing closed. */
+export function limitUser(bucket: UserRateLimitBucket, userId: string): Promise<RateLimitResult> {
+  return checkRateLimit({ bucket, userId, headers: new Headers() });
 }
 
 /** The response for a refused request. No body detail beyond what the status already says. */

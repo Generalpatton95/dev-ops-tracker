@@ -26,9 +26,9 @@ Eight requirements, each written as a rule with checks that prove it works. Task
 
 **REQ-3 Invite teammates.** An owner can bring teammates into the workspace.
 
-- [ ] The owner can create an invite link and turn it off.
-- [ ] A signed-in user who opens a working link joins as a member.
-- [ ] The owner can see all members and remove any member.
+- [x] The owner can create an invite link and turn it off.
+- [x] A signed-in user who opens a working link joins as a member.
+- [x] The owner can see all members and remove any member.
 
 **REQ-4 Projects.** Members can create and manage projects inside a workspace.
 
@@ -146,10 +146,11 @@ Stick to the product spec's stack and keep every hosting choice swappable.
   - The token travels in the URL path, so it can show up in the host's request logs. Accepted: turning the link off or making a new one ends it.
   - Current workspace: a header switcher lists your workspaces. The choice is kept in an httpOnly, SameSite=Lax cookie holding the workspace id; the server checks your membership on every request and falls back to the workspace you own when the cookie is missing, wrong or you've been removed.
   - Rename, invites and members act on the current workspace, owner only. Members see the workspace name on `/settings` without the owner's controls.
-  - Members list (owner only): name, role and join date for each member, with Remove on everyone but the owner. Removing deletes that membership; the owner can't be removed. Anyone else, or an unknown id, gets the same `NOT_FOUND`.
+  - Members list (owner only): name, role and join date for each member, with Remove on everyone but the owner. Removing deletes that membership and turns off the invite link in the same step, so the removed person can't rejoin with it; Settings says so (decided 2026-11-02, from the T-10 reviews). The owner can't be removed. Anyone else, or an unknown id, gets the same `NOT_FOUND`.
   - tRPC, all `protectedProcedure`: `workspace.list`, `workspace.switch`, `workspace.createInvite`, `workspace.disableInvite`, `workspace.members`, `workspace.removeMember`, `invite.preview`, `invite.join`.
   - The tRPC body cap now counts bytes while reading instead of trusting `Content-Length` (closes the known gap).
-  - `/privacy` adds: if you join a workspace, its owner sees your GitHub name and when you joined. No new kind of data is collected.
+  - `/privacy` adds: if you join a workspace, its owner sees your GitHub name and when you joined; the `dot-workspace` cookie (a workspace id, kept up to a year); and that invite attempts are counted by a keyed hash of your user id. No new kind of data is collected.
+  - The tRPC route takes only `application/json` POSTs, so a plain cross-site form can't reach a mutation even without SameSite (from the T-10 security review, 2026-11-02).
 - **Notes for later tasks (from the T-5 and T-6 reviews, 2026-10-16):**
   - T-8: wrap the adapter's `createUser` (set `github_id`, drop email) and `linkAccount` (drop tokens), with tests; give Auth.js its own logger that records error names and codes only, since Drizzle errors carry query values; hashing session tokens at rest is optional.
   - T-10: invite tokens from `randomBytes(32)` (base64url), looked up through the unique index; consider storing a hash.
@@ -174,7 +175,7 @@ Twelve tasks, in build order. Until the app can track itself (M2), this table is
 | T-7 | Turn on Neon branches for Vercel preview deploys | REQ-6 | S | Done |
 | T-8 | Add GitHub sign-in, sign-out, protected pages and rate limits | REQ-1 | M | Done |
 | T-9 | Create a workspace on first sign-in, plus rename | REQ-2 | S | Done   |
-| T-10 | Build invite links and the members list | REQ-3 | M | Doing |
+| T-10 | Build invite links and the members list | REQ-3 | M | Review |
 | T-11 | Build projects: create, sidebar list, rename, archive | REQ-4 | M | Todo |
 | T-12 | Check the app runs locally on plain Postgres | REQ-7 | S | Todo |
 
